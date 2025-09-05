@@ -33,7 +33,7 @@ export const config = {
   
   // Auth
   auth: {
-    allowedEmails: env.ALLOWED_EMAILS.split(',').map(email => email.trim()),
+    allowedEmails: env.ALLOWED_EMAILS ? env.ALLOWED_EMAILS.split(',').map(email => email.trim()) : [],
   },
 } as const
 

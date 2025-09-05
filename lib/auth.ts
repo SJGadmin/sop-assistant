@@ -3,14 +3,13 @@ import { PrismaAdapter } from '@auth/prisma-adapter'
 import GoogleProvider from 'next-auth/providers/google'
 import { db } from './db'
 import { env } from './env'
-import config from './config'
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(db),
+  adapter: env.DATABASE_URL ? PrismaAdapter(db) : undefined,
   providers: [
     GoogleProvider({
-      clientId: env.GOOGLE_CLIENT_ID,
-      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      clientId: env.GOOGLE_CLIENT_ID || '',
+      clientSecret: env.GOOGLE_CLIENT_SECRET || '',
     }),
   ],
   callbacks: {
@@ -18,14 +17,15 @@ export const authOptions: NextAuthOptions = {
       const email = user.email
       if (!email) return false
       
-      const isAllowed = config.auth.allowedEmails.some(
+      const allowedEmails = env.ALLOWED_EMAILS?.split(',').map(email => email.trim()) || []
+      const isAllowed = allowedEmails.some(
         allowedEmail => email.toLowerCase() === allowedEmail.toLowerCase()
       )
       
       return isAllowed
     },
     async session({ session, user }) {
-      if (session.user) {
+      if (session.user && user) {
         session.user.id = user.id
       }
       return session
@@ -35,6 +35,6 @@ export const authOptions: NextAuthOptions = {
     signIn: '/signin',
   },
   session: {
-    strategy: 'database',
+    strategy: env.DATABASE_URL ? 'database' : 'jwt',
   },
 }
