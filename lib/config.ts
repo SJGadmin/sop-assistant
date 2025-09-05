@@ -31,10 +31,7 @@ export const config = {
     windowMinutes: env.RATE_LIMIT_WINDOW_MINUTES,
   },
   
-  // Auth
-  auth: {
-    allowedEmails: env.ALLOWED_EMAILS ? env.ALLOWED_EMAILS.split(',').map(email => email.trim()) : [],
-  },
+  // No authentication required anymore
 } as const
 
 export default config

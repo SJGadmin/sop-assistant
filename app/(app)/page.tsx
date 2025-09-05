@@ -1,8 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
 import { Sidebar, type Chat } from "@/components/Sidebar"
 import { MessageList, type Message } from "@/components/MessageList"
 import { ChatInput } from "@/components/ChatInput"
@@ -10,8 +8,6 @@ import { useToast } from "@/hooks/use-toast"
 import { generateChatTitle } from "@/lib/utils"
 
 export default function HomePage() {
-  const { data: session } = useSession()
-  const router = useRouter()
   const { toast } = useToast()
 
   const [chats, setChats] = React.useState<Chat[]>([])
@@ -313,8 +309,6 @@ export default function HomePage() {
               messages={messages}
               isStreaming={isStreaming}
               streamingContent={streamingContent}
-              userImage={session?.user?.image || undefined}
-              userName={session?.user?.name || undefined}
             />
             <ChatInput
               onSend={handleSendMessage}

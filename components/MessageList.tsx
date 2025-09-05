@@ -5,7 +5,7 @@ import { Copy, User, Bot } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn, copyToClipboard, formatRelativeTime } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
@@ -23,16 +23,12 @@ interface MessageListProps {
   messages: Message[]
   isStreaming?: boolean
   streamingContent?: string
-  userImage?: string
-  userName?: string
 }
 
 export function MessageList({
   messages,
   isStreaming = false,
-  streamingContent = "",
-  userImage,
-  userName = "You"
+  streamingContent = ""
 }: MessageListProps) {
   const { toast } = useToast()
   const scrollAreaRef = React.useRef<HTMLDivElement>(null)
@@ -75,12 +71,9 @@ export function MessageList({
       >
         <Avatar className="h-8 w-8 shrink-0">
           {isUser ? (
-            <>
-              <AvatarImage src={userImage} alt={userName} />
-              <AvatarFallback>
-                <User className="h-4 w-4" />
-              </AvatarFallback>
-            </>
+            <AvatarFallback>
+              <User className="h-4 w-4" />
+            </AvatarFallback>
           ) : (
             <AvatarFallback className="bg-primary text-primary-foreground">
               <Bot className="h-4 w-4" />
@@ -91,7 +84,7 @@ export function MessageList({
         <div className="flex-1 space-y-2 overflow-hidden">
           <div className="flex items-center justify-between">
             <div className="text-sm font-medium">
-              {isUser ? userName : "Assistant"}
+              {isUser ? "You" : "Assistant"}
             </div>
             <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <span className="text-xs text-muted-foreground">

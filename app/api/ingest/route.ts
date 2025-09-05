@@ -1,20 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/lib/auth"
 
 export const runtime = "nodejs"
 export const maxDuration = 300 // 5 minutes
 
 export async function POST(request: NextRequest) {
   try {
-    // Check if request is from authenticated user or cron
-    const session = await getServerSession(authOptions)
+    // Allow cron jobs with proper secret
     const authHeader = request.headers.get('authorization')
+    const cronSecret = process.env.CRON_SECRET
     
-    // Allow cron jobs (Vercel cron sends auth header) or authenticated users
-    const isAuthorized = session?.user || authHeader === `Bearer ${process.env.CRON_SECRET}`
-    
-    if (!isAuthorized) {
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

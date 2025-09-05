@@ -5,23 +5,10 @@ import {
   Plus, 
   MessageSquare, 
   Trash2, 
-  MoreHorizontal,
-  Settings,
-  LogOut
+  Settings
 } from "lucide-react"
-import { useSession, signOut } from "next-auth/react"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuSeparator, 
-  DropdownMenuTrigger 
-} from "@/components/ui/dropdown-menu"
-import { Separator } from "@/components/ui/separator"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { cn, formatRelativeTime } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
@@ -50,8 +37,6 @@ export function Sidebar({
   onDeleteChat,
   className
 }: SidebarProps) {
-  const { data: session } = useSession()
-  const router = useRouter()
   const { toast } = useToast()
 
   const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
@@ -72,9 +57,7 @@ export function Sidebar({
     }
   }
 
-  const handleSignOut = () => {
-    signOut({ callbackUrl: '/signin' })
-  }
+  // Removed sign out functionality
 
   const handleIngestClick = async () => {
     try {
@@ -158,40 +141,16 @@ export function Sidebar({
         </div>
       </ScrollArea>
 
-      {/* User Menu */}
+      {/* Settings Menu */}
       <div className="border-t p-4">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="w-full justify-start p-2 h-auto">
-              <Avatar className="h-6 w-6 mr-2">
-                <AvatarImage src={session?.user?.image || ''} alt={session?.user?.name || ''} />
-                <AvatarFallback className="text-xs">
-                  {session?.user?.name?.[0]?.toUpperCase() || 'U'}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 text-left">
-                <div className="text-sm font-medium truncate">
-                  {session?.user?.name || 'User'}
-                </div>
-                <div className="text-xs text-muted-foreground truncate">
-                  {session?.user?.email}
-                </div>
-              </div>
-              <MoreHorizontal className="h-4 w-4 ml-2" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem onClick={handleIngestClick}>
-              <Settings className="mr-2 h-4 w-4" />
-              Refresh Documents
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign Out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button 
+          variant="ghost" 
+          className="w-full justify-start"
+          onClick={handleIngestClick}
+        >
+          <Settings className="mr-2 h-4 w-4" />
+          Refresh Documents
+        </Button>
       </div>
     </div>
   )

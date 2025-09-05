@@ -1,20 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/lib/auth"
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     // Dynamic import to avoid build-time issues
     const { db } = await import("@/lib/db")
 
     const chats = await db.chat.findMany({
       where: {
-        userId: session.user.id,
         deletedAt: null,
       },
       orderBy: {
@@ -40,17 +32,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     // Dynamic import to avoid build-time issues
     const { db } = await import("@/lib/db")
 
     const chat = await db.chat.create({
       data: {
-        userId: session.user.id,
         title: "New Chat",
       },
     })

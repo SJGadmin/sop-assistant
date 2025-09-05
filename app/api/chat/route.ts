@@ -1,30 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/lib/auth"
 
 export const runtime = "nodejs"
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     // Dynamic imports to avoid build-time issues
     const { db } = await import("@/lib/db")
-    const { checkRateLimit } = await import("@/lib/rateLimit")
     const { retrieveContext, generateResponseAndSave } = await import("@/lib/rag")
     const { countTokens } = await import("@/lib/chunker")
-
-    // Check rate limit
-    const rateLimit = await checkRateLimit(session.user.id)
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        { error: "Rate limit exceeded" },
-        { status: 429 }
-      )
-    }
 
     const { chatId, message } = await request.json()
 
@@ -35,11 +18,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify chat ownership
+    // Verify chat exists
     const chat = await db.chat.findFirst({
       where: {
         id: chatId,
-        userId: session.user.id,
         deletedAt: null,
       },
     })
