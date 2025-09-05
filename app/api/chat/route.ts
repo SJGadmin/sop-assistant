@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { checkRateLimit } from "@/lib/rateLimit"
-import { retrieveContext, generateResponse } from "@/lib/rag"
+import { retrieveContext, generateResponseAndSave } from "@/lib/rag"
 import { countTokens } from "@/lib/chunker"
 
 export const runtime = "nodejs"
@@ -79,59 +79,17 @@ export async function POST(request: NextRequest) {
       chatHistory.slice(-5).map(msg => msg.content) // Last 5 messages for search context
     )
 
-    // Generate streaming response
-    const responseStream = await generateResponse(message, context, chatHistory)
+    // Generate streaming response with database saving
+    const responseStream = await generateResponseAndSave(message, context, chatHistory, chatId)
 
-    // Create streaming response
-    const encoder = new TextEncoder()
-    
-    const stream = new ReadableStream({
-      async start(controller) {
-        const reader = responseStream.getReader()
-        let assistantContent = ""
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
-
-            const chunk = new TextDecoder().decode(value)
-            assistantContent += chunk
-
-            // Stream the content
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ content: chunk })}\n\n`)
-            )
-          }
-
-          // Save assistant message and send final sources
-          const assistantMessage = await db.message.create({
-            data: {
-              chatId,
-              role: "assistant",
-              content: assistantContent,
-              tokensUsed: countTokens(assistantContent),
-            },
-          })
-
-          // Send sources information
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({ error: "Stream interrupted" })}\n\n`
-            )
-          )
-          controller.close()
-        }
-      },
-    })
-
-    return new Response(stream, {
+    // Create response with proper headers
+    return new Response(responseStream, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
       },
-    })
+    });    
 
   } catch (error) {
     console.error("Chat API error:", error)

@@ -148,14 +148,14 @@ export default function HomePage() {
           chatId = data.chatId
           
           const newChat: Chat = {
-            id: chatId,
+            id: data.chatId, // Use data.chatId directly since we know it exists
             title: generateChatTitle(content),
             createdAt: new Date(),
             updatedAt: new Date(),
           }
           
           setChats(prev => [newChat, ...prev])
-          setCurrentChatId(chatId)
+          setCurrentChatId(data.chatId)
         } else {
           throw new Error('Failed to create chat')
         }
@@ -168,6 +168,9 @@ export default function HomePage() {
         return
       }
     }
+
+    // At this point chatId is guaranteed to be a string
+    if (!chatId) return
 
     // Add user message immediately
     const userMessage: Message = {

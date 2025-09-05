@@ -1,5 +1,5 @@
 import { db } from './db'
-import { getEmbedding } from './embeddings'
+import { getEmbedding, getEmbeddings } from './embeddings'
 import { chunkText, countTokens, summarizeText } from './chunker'
 import { sliteClient } from './slite'
 import OpenAI from 'openai'
@@ -39,7 +39,8 @@ export async function retrieveContext(query: string, chatHistory?: string[]): Pr
   const hasLowConfidence = filteredChunks.length === 0
   
   // Get unique source document titles
-  const sources = [...new Set(filteredChunks.map(chunk => chunk.documentTitle))]
+  const sourceSet = new Set(filteredChunks.map(chunk => chunk.documentTitle))
+  const sources = Array.from(sourceSet)
   
   return {
     chunks: filteredChunks,
@@ -108,21 +109,43 @@ export async function generateResponse(
     max_tokens: 1000,
   })
 
-  // Convert OpenAI stream to web stream
+  // Convert OpenAI stream to Server-Sent Events format
   const encoder = new TextEncoder()
   
   return new ReadableStream({
     async start(controller) {
       try {
+        let fullContent = ""
+        
         for await (const chunk of response) {
           const content = chunk.choices[0]?.delta?.content
           if (content) {
-            controller.enqueue(encoder.encode(content))
+            fullContent += content
+            // Send content chunk as SSE
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+            )
           }
         }
+        
+        // Send final message with sources if available
+        if (context.sources.length > 0) {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ 
+              content: "", 
+              sources: context.sources 
+            })}\n\n`)
+          )
+        }
+        
+        // Send completion signal
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"))
         controller.close()
       } catch (error) {
-        controller.error(error)
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`)
+        )
+        controller.close()
       }
     },
   })
@@ -149,11 +172,10 @@ Guidelines:
 - If the sources don't fully answer the question, say so
 - Include relevant details and procedures when helpful
 - Maintain a professional, helpful tone
+- Do not mention sources in your response as they will be handled separately
 
 Knowledge Base:
-${contextText}
-
-Always end your response with: Sources: ${context.sources.join(', ')}`
+${contextText}`
 }
 
 function createMessages(
@@ -192,6 +214,76 @@ function createMessages(
   messages.push({ role: 'user', content: query })
 
   return messages
+}
+
+export async function generateResponseAndSave(
+  query: string,
+  context: ChatContext,
+  chatHistory: Array<{ role: string; content: string }> | undefined,
+  chatId: string
+): Promise<ReadableStream<Uint8Array>> {
+  const systemPrompt = createSystemPrompt(context)
+  const messages = createMessages(systemPrompt, query, chatHistory)
+  
+  const response = await openai.chat.completions.create({
+    model: config.openai.chatModel,
+    messages,
+    stream: true,
+    temperature: 0.1,
+    max_tokens: 1000,
+  })
+
+  // Convert OpenAI stream to Server-Sent Events format
+  const encoder = new TextEncoder()
+  
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        let fullContent = ""
+        
+        for await (const chunk of response) {
+          const content = chunk.choices[0]?.delta?.content
+          if (content) {
+            fullContent += content
+            // Send content chunk as SSE
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+            )
+          }
+        }
+        
+        // Save assistant message to database
+        await db.message.create({
+          data: {
+            chatId,
+            role: "assistant",
+            content: fullContent,
+            tokensUsed: countTokens(fullContent),
+          },
+        })
+        
+        // Send final message with sources if available
+        if (context.sources.length > 0) {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ 
+              content: "", 
+              sources: context.sources 
+            })}\n\n`)
+          )
+        }
+        
+        // Send completion signal
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"))
+        controller.close()
+      } catch (error) {
+        console.error("Stream error:", error)
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ error: "Stream error" })}\n\n`)
+        )
+        controller.close()
+      }
+    },
+  })
 }
 
 export async function ingestSliteDocs(): Promise<{ processed: number; updated: number; errors: string[] }> {
