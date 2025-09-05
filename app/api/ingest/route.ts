@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
-import { ingestSliteDocs } from "@/lib/rag"
 
 export const runtime = "nodejs"
 export const maxDuration = 300 // 5 minutes
@@ -21,6 +20,8 @@ export async function POST(request: NextRequest) {
 
     console.log("Starting document ingestion...")
     
+    // Dynamic import to avoid build-time issues
+    const { ingestSliteDocs } = await import("@/lib/rag")
     const result = await ingestSliteDocs()
     
     console.log(`Ingestion completed: ${result.processed} processed, ${result.updated} updated`)

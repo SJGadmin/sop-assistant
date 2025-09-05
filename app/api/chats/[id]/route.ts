@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
-import { db } from "@/lib/db"
 
 export async function GET(
   request: NextRequest,
@@ -12,6 +11,9 @@ export async function GET(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    // Dynamic import to avoid build-time issues
+    const { db } = await import("@/lib/db")
 
     const chat = await db.chat.findFirst({
       where: {
@@ -77,6 +79,9 @@ export async function DELETE(
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    // Dynamic import to avoid build-time issues
+    const { db } = await import("@/lib/db")
 
     const chat = await db.chat.findFirst({
       where: {

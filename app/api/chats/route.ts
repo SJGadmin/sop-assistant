@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
-import { db } from "@/lib/db"
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,6 +8,9 @@ export async function GET(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    // Dynamic import to avoid build-time issues
+    const { db } = await import("@/lib/db")
 
     const chats = await db.chat.findMany({
       where: {
@@ -42,6 +44,9 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    // Dynamic import to avoid build-time issues
+    const { db } = await import("@/lib/db")
 
     const chat = await db.chat.create({
       data: {
