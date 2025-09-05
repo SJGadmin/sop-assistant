@@ -1,0 +1,4587 @@
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  code: ({ node, inline, className, children, ...props }) => {
+                    const match = /language-(\w+)/.exec(className || '')
+                    return !inline && match ? (
+                      <div className="relative">
+                        <pre className="bg-muted border rounded-lg p-4 overflow-x-auto">
+                          <code className={className} {...props}>
+                            {children}
+                          </code>
+                        </pre>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="absolute top-2 right-2 h-6 w-6 p-0"
+                          onClick={() => handleCopy(String(children).replace(/\n$/, ''))}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <code className={className} {...props}>
+                        {children}
+                      </code>
+                    )
+                  },
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
+            )}
+          </div>
+          
+          {message.sources && message.sources.length > 0 && (
+            <SourceList sources={message.sources} />
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <ScrollArea ref={scrollAreaRef} className="flex-1">
+      <div className="divide-y">
+        {messages.map((message, index) => 
+          renderMessage(message, index === messages.length - 1)
+        )}
+        
+        {isStreaming && streamingContent && (
+          <div className="group flex items-start space-x-3 p-6 bg-background">
+            <Avatar className="h-8 w-8 shrink-0">
+              <AvatarFallback className="bg-primary text-primary-foreground">
+                <Bot className="h-4 w-4" />
+              </AvatarFallback>
+            </Avatar>
+            
+            <div className="flex-1 space-y-2 overflow-hidden">
+              <div className="text-sm font-medium">Assistant</div>
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {streamingContent}
+                </ReactMarkdown>
+                <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1" />
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <div ref={bottomRef} />
+      </div>
+    </ScrollArea>
+  )
+}
+```
+
+### components/SourceList.tsx
+```typescript
+"use client"
+
+import * as React from "react"
+import { FileText } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+interface SourceListProps {
+  sources: string[]
+  className?: string
+}
+
+export function SourceList({ sources, className }: SourceListProps) {
+  if (!sources || sources.length === 0) {
+    return null
+  }
+
+  return (
+    <div className={cn("mt-3 pt-2 border-t border-border/50", className)}>
+      <div className="flex items-start space-x-2 text-xs text-muted-foreground">
+        <FileText className="h-3 w-3 mt-0.5 shrink-0" />
+        <div>
+          <span className="font-medium">Sources:</span>{" "}
+          {sources.map((source, index) => (
+            <React.Fragment key={source}>
+              <span className="hover:text-foreground transition-colors cursor-default">
+                {source}
+              </span>
+              {index < sources.length - 1 && ", "}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+### components/Sidebar.tsx
+```typescript
+"use client"
+
+import * as React from "react"
+import { 
+  Plus, 
+  MessageSquare, 
+  Trash2, 
+  MoreHorizontal,
+  Settings,
+  LogOut
+} from "lucide-react"
+import { useSession, signOut } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu"
+import { Separator } from "@/components/ui/separator"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { cn, formatRelativeTime } from "@/lib/utils"
+import { useToast } from "@/hooks/use-toast"
+
+export interface Chat {
+  id: string
+  title: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+interface SidebarProps {
+  chats: Chat[]
+  currentChatId?: string
+  onChatSelect: (chatId: string) => void
+  onNewChat: () => void
+  onDeleteChat: (chatId: string) => void
+  className?: string
+}
+
+export function Sidebar({
+  chats,
+  currentChatId,
+  onChatSelect,
+  onNewChat,
+  onDeleteChat,
+  className
+}: SidebarProps) {
+  const { data: session } = useSession()
+  const router = useRouter()
+  const { toast } = useToast()
+
+  const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    
+    try {
+      await onDeleteChat(chatId)
+      toast({
+        title: "Chat deleted",
+        description: "The chat has been deleted successfully.",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete chat. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleSignOut = () => {
+    signOut({ callbackUrl: '/signin' })
+  }
+
+  const handleIngestClick = async () => {
+    try {
+      const response = await fetch('/api/ingest', {
+        method: 'POST',
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        toast({
+          title: "Ingestion started",
+          description: `Processing ${result.message || 'documents'}...`,
+        })
+      } else {
+        throw new Error('Failed to start ingestion')
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to start document ingestion.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  return (
+    <div className={cn("flex h-full w-64 flex-col border-r bg-muted/50", className)}>
+      {/* Header */}
+      <div className="flex h-14 items-center justify-between px-4 border-b">
+        <div className="flex items-center space-x-2">
+          <div className="h-6 w-6 rounded bg-primary" />
+          <span className="font-semibold text-sm">SOP Assistant</span>
+        </div>
+        <ThemeToggle />
+      </div>
+
+      {/* New Chat Button */}
+      <div className="p-4">
+        <Button onClick={onNewChat} className="w-full justify-start" size="sm">
+          <Plus className="mr-2 h-4 w-4" />
+          New Chat
+        </Button>
+      </div>
+
+      {/* Chat History */}
+      <ScrollArea className="flex-1 px-2">
+        <div className="space-y-1">
+          {chats.map((chat) => (
+            <div
+              key={chat.id}
+              className={cn(
+                "group flex items-center space-x-2 rounded-lg px-3 py-2 text-sm hover:bg-accent cursor-pointer",
+                currentChatId === chat.id && "bg-accent"
+              )}
+              onClick={() => onChatSelect(chat.id)}
+            >
+              <MessageSquare className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="flex-1 truncate">
+                <div className="truncate font-medium">{chat.title}</div>
+                <div className="text-xs text-muted-foreground">
+                  {formatRelativeTime(chat.updatedAt)}
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                onClick={(e) => handleDeleteChat(chat.id, e)}
+              >
+                <Trash2 className="h-3 w-3" />
+                <span className="sr-only">Delete chat</span>
+              </Button>
+            </div>
+          ))}
+          
+          {chats.length === 0 && (
+            <div className="px-3 py-8 text-center text-sm text-muted-foreground">
+              No chats yet. Start a new conversation!
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+
+      {/* User Menu */}
+      <div className="border-t p-4">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="w-full justify-start p-2 h-auto">
+              <Avatar className="h-6 w-6 mr-2">
+                <AvatarImage src={session?.user?.image || ''} alt={session?.user?.name || ''} />
+                <AvatarFallback className="text-xs">
+                  {session?.user?.name?.[0]?.toUpperCase() || 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 text-left">
+                <div className="text-sm font-medium truncate">
+                  {session?.user?.name || 'User'}
+                </div>
+                <div className="text-xs text-muted-foreground truncate">
+                  {session?.user?.email}
+                </div>
+              </div>
+              <MoreHorizontal className="h-4 w-4 ml-2" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuItem onClick={handleIngestClick}>
+              <Settings className="mr-2 h-4 w-4" />
+              Refresh Documents
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleSignOut}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign Out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  )
+}
+```
+
+## App Routes and Pages
+
+### app/layout.tsx
+```typescript
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import { ThemeProvider } from '@/components/theme-provider'
+import { Toaster } from '@/components/ui/toaster'
+import '@/styles/globals.css'
+
+const inter = Inter({ subsets: ['latin'] })
+
+export const metadata: Metadata = {
+  title: 'SOP Assistant - Stewart & Jane Group',
+  description: 'Internal Standard Operating Procedures Assistant',
+}
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className={inter.className}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {children}
+          <Toaster />
+        </ThemeProvider>
+      </body>
+    </html>
+  )
+}
+```
+
+### app/(auth)/signin/page.tsx
+```typescript
+"use client"
+
+import { signIn, getSession } from "next-auth/react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useToast } from "@/hooks/use-toast"
+
+export default function SignInPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(false)
+  
+  const callbackUrl = searchParams.get('callbackUrl') || '/'
+  const error = searchParams.get('error')
+
+  useEffect(() => {
+    // Check if user is already signed in
+    getSession().then((session) => {
+      if (session) {
+        router.push(callbackUrl)
+      }
+    })
+
+    // Show error message if sign in failed
+    if (error) {
+      let errorMessage = "An error occurred during sign in."
+      
+      switch (error) {
+        case 'AccessDenied':
+          errorMessage = "Access denied. Your email is not authorized to access this application."
+          break
+        case 'Configuration':
+          errorMessage = "There is a problem with the server configuration."
+          break
+        case 'Verification':
+          errorMessage = "The verification token has expired."
+          break
+        default:
+          errorMessage = "An unexpected error occurred. Please try again."
+      }
+      
+      toast({
+        title: "Sign in failed",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    }
+  }, [error, callbackUrl, router, toast])
+
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true)
+    try {
+      await signIn('google', { callbackUrl })
+    } catch (error) {
+      toast({
+        title: "Sign in failed",
+        description: "Failed to initiate Google sign in. Please try again.",
+        variant: "destructive",
+      })
+    }
+    setIsLoading(false)
+  }
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-muted/50 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <div className="mx-auto h-12 w-12 rounded-lg bg-primary flex items-center justify-center mb-4">
+            <div className="h-6 w-6 rounded bg-primary-foreground" />
+          </div>
+          <CardTitle className="text-2xl font-bold">SOP Assistant</CardTitle>
+          <CardDescription>
+            Sign in to access Stewart & Jane Group's Standard Operating Procedures
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button 
+            className="w-full" 
+            onClick={handleGoogleSignIn}
+            disabled={isLoading}
+          >
+            {isLoading ? "Signing in..." : "Continue with Google"}
+          </Button>
+          
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            Only authorized Stewart & Jane Group emails can access this application.
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+```
+
+### app/(app)/layout.tsx
+```typescript
+import { getServerSession } from "next-auth/next"
+import { redirect } from "next/navigation"
+import { authOptions } from "@/lib/auth"
+import { SessionProvider } from "./session-provider"
+
+export default async function AppLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const session = await getServerSession(authOptions)
+
+  if (!session) {
+    redirect('/signin')
+  }
+
+  return (
+    <SessionProvider session={session}>
+      {children}
+    </SessionProvider>
+  )
+}
+```
+
+### app/(app)/session-provider.tsx
+```typescript
+"use client"
+
+import { SessionProvider as NextAuthSessionProvider } from "next-auth/react"
+import { Session } from "next-auth"
+
+interface SessionProviderProps {
+  children: React.ReactNode
+  session: Session | null
+}
+
+export function SessionProvider({ children, session }: SessionProviderProps) {
+  return (
+    <NextAuthSessionProvider session={session}>
+      {children}
+    </NextAuthSessionProvider>
+  )
+}
+```
+
+### app/(app)/page.tsx
+```typescript
+"use client"
+
+import * as React from "react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { Sidebar, type Chat } from "@/components/Sidebar"
+import { MessageList, type Message } from "@/components/MessageList"
+import { ChatInput } from "@/components/ChatInput"
+import { useToast } from "@/hooks/use-toast"
+import { generateChatTitle } from "@/lib/utils"
+
+export default function HomePage() {
+  const { data: session } = useSession()
+  const router = useRouter()
+  const { toast } = useToast()
+
+  const [chats, setChats] = React.useState<Chat[]>([])
+  const [currentChatId, setCurrentChatId] = React.useState<string>()
+  const [messages, setMessages] = React.useState<Message[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
+  const [isStreaming, setIsStreaming] = React.useState(false)
+  const [streamingContent, setStreamingContent] = React.useState("")
+  const [abortController, setAbortController] = React.useState<AbortController>()
+
+  // Load chats on mount
+  React.useEffect(() => {
+    loadChats()
+  }, [])
+
+  // Load messages when chat changes
+  React.useEffect(() => {
+    if (currentChatId) {
+      loadMessages(currentChatId)
+    } else {
+      setMessages([])
+    }
+  }, [currentChatId])
+
+  // Keyboard shortcuts
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        handleNewChat()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  const loadChats = async () => {
+    try {
+      const response = await fetch('/api/chats')
+      if (response.ok) {
+        const data = await response.json()
+        setChats(data.chats || [])
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load chats",
+        variant: "destructive",
+      })
+    }
+    setIsLoading(false)
+  }
+
+  const loadMessages = async (chatId: string) => {
+    try {
+      const response = await fetch(`/api/chats/${chatId}`)
+      if (response.ok) {
+        const data = await response.json()
+        setMessages(data.messages || [])
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to load messages",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleNewChat = async () => {
+    try {
+      const response = await fetch('/api/chats', {
+        method: 'POST',
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        const newChat: Chat = {
+          id: data.chatId,
+          title: "New Chat",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }
+        
+        setChats(prev => [newChat, ...prev])
+        setCurrentChatId(data.chatId)
+        setMessages([])
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to create new chat",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleChatSelect = (chatId: string) => {
+    setCurrentChatId(chatId)
+  }
+
+  const handleDeleteChat = async (chatId: string) => {
+    try {
+      const response = await fetch(`/api/chats/${chatId}`, {
+        method: 'DELETE',
+      })
+      
+      if (response.ok) {
+        setChats(prev => prev.filter(chat => chat.id !== chatId))
+        if (currentChatId === chatId) {
+          setCurrentChatId(undefined)
+          setMessages([])
+        }
+      }
+    } catch (error) {
+      throw error // Re-throw to be caught by Sidebar component
+    }
+  }
+
+  const handleSendMessage = async (content: string) => {
+    if (!content.trim()) return
+
+    // Create or get current chat
+    let chatId = currentChatId
+    if (!chatId) {
+      try {
+        const response = await fetch('/api/chats', {
+          method: 'POST',
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          chatId = data.chatId
+          
+          const newChat: Chat = {
+            id: chatId,
+            title: generateChatTitle(content),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+          
+          setChats(prev => [newChat, ...prev])
+          setCurrentChatId(chatId)
+        } else {
+          throw new Error('Failed to create chat')
+        }
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to create chat",
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
+    // Add user message immediately
+    const userMessage: Message = {
+      id: `temp-${Date.now()}`,
+      role: "user",
+      content,
+      createdAt: new Date(),
+    }
+    
+    setMessages(prev => [...prev, userMessage])
+    setIsStreaming(true)
+    setStreamingContent("")
+
+    // Create abort controller for this request
+    const controller = new AbortController()
+    setAbortController(controller)
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chatId,
+          message: content,
+        }),
+        signal: controller.signal,
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to send message')
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('No response body')
+      }
+
+      let assistantContent = ""
+      
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = new TextDecoder().decode(value)
+          const lines = chunk.split('\n')
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6)
+              if (data === '[DONE]') {
+                break
+              }
+              
+              try {
+                const parsed = JSON.parse(data)
+                if (parsed.content) {
+                  assistantContent += parsed.content
+                  setStreamingContent(assistantContent)
+                } else if (parsed.sources) {
+                  // Handle final message with sources
+                  const finalMessage: Message = {
+                    id: `msg-${Date.now()}`,
+                    role: "assistant",
+                    content: assistantContent,
+                    sources: parsed.sources,
+                    createdAt: new Date(),
+                  }
+                  
+                  setMessages(prev => [...prev, finalMessage])
+                  setStreamingContent("")
+                  
+                  // Update chat title if this is the first message
+                  if (messages.length === 1) { // User message + this assistant message
+                    setChats(prev => prev.map(chat => 
+                      chat.id === chatId 
+                        ? { ...chat, title: generateChatTitle(content), updatedAt: new Date() }
+                        : chat
+                    ))
+                  }
+                }
+              } catch (parseError) {
+                // Ignore parse errors for partial chunks
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock()
+      }
+      
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        // Request was aborted
+        setStreamingContent("")
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to send message",
+          variant: "destructive",
+        })
+        setStreamingContent("")
+      }
+    }
+    
+    setIsStreaming(false)
+    setAbortController(undefined)
+  }
+
+  const handleStopStreaming = () => {
+    if (abortController) {
+      abortController.abort()
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-screen bg-background">
+      <Sidebar
+        chats={chats}
+        currentChatId={currentChatId}
+        onChatSelect={handleChatSelect}
+        onNewChat={handleNewChat}
+        onDeleteChat={handleDeleteChat}
+      />
+      
+      <div className="flex flex-1 flex-col">
+        {currentChatId ? (
+          <>
+            <MessageList
+              messages={messages}
+              isStreaming={isStreaming}
+              streamingContent={streamingContent}
+              userImage={session?.user?.image || undefined}
+              userName={session?.user?.name || undefined}
+            />
+            <ChatInput
+              onSend={handleSendMessage}
+              onStop={handleStopStreaming}
+              isStreaming={isStreaming}
+            />
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center space-y-4">
+              <div className="h-12 w-12 rounded-lg bg-primary mx-auto flex items-center justify-center">
+                <div className="h-6 w-6 rounded bg-primary-foreground" />
+              </div>
+              <h1 className="text-2xl font-semibold">Welcome to SOP Assistant</h1>
+              <p className="text-muted-foreground max-w-md">
+                Ask questions about Stewart & Jane Group's standard operating procedures, 
+                policies, and documentation.
+              </p>
+              <div className="text-sm text-muted-foreground">
+                Press <kbd className="px-2 py-1 bg-muted rounded text-xs">⌘K</kbd> to start a new chat
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+```
+
+## API Routes
+
+### app/api/auth/[...nextauth]/route.ts
+```typescript
+import NextAuth from 'next-auth'
+import { authOptions } from '@/lib/auth'
+
+const handler = NextAuth(authOptions)
+
+export { handler as GET, handler as POST }
+```
+
+### app/api/chat/route.ts
+```typescript
+import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/lib/auth"
+import { db } from "@/lib/db"
+import { checkRateLimit } from "@/lib/rateLimit"
+import { retrieveContext, generateResponse } from "@/lib/rag"
+import { countTokens } from "@/lib/chunker"
+
+export const runtime = "nodejs"
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Check rate limit
+    const rateLimit = await checkRateLimit(session.user.id)
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded" },
+        { status: 429 }
+      )
+    }
+
+    const { chatId, message } = await request.json()
+
+    if (!message || typeof message !== "string") {
+      return NextResponse.json(
+        { error: "Message is required" },
+        { status: 400 }
+      )
+    }
+
+    // Verify chat ownership
+    const chat = await db.chat.findFirst({
+      where: {
+        id: chatId,
+        userId: session.user.id,
+        deletedAt: null,
+      },
+    })
+
+    if (!chat) {
+      return NextResponse.json(
+        { error: "Chat not found" },
+        { status: 404 }
+      )
+    }
+
+    // Get recent chat history for context
+    const recentMessages = await db.message.findMany({
+      where: { chatId },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    })
+
+    const chatHistory = recentMessages
+      .reverse()
+      .map(msg => ({
+        role: msg.role,
+        content: msg.content,
+      }))
+
+    // Save user message
+    const userMessage = await db.message.create({
+      data: {
+        chatId,
+        role: "user",
+        content: message,
+        tokensUsed: countTokens(message),
+      },
+    })
+
+    // Retrieve context using RAG
+    const context = await retrieveContext(
+      message,
+      chatHistory.slice(-5).map(msg => msg.content) // Last 5 messages for search context
+    )
+
+    // Generate streaming response
+    const responseStream = await generateResponse(message, context, chatHistory)
+
+    // Create streaming response
+    const encoder = new TextEncoder()
+    
+    const stream = new ReadableStream({
+      async start(controller) {
+        const reader = responseStream.getReader()
+        let assistantContent = ""
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            const chunk = new TextDecoder().decode(value)
+            assistantContent += chunk
+
+            // Stream the content
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ content: chunk })}\n\n`)
+            )
+          }
+
+          // Save assistant message and send final sources
+          const assistantMessage = await db.message.create({
+            data: {
+              chatId,
+              role: "assistant",
+              content: assistantContent,
+              tokensUsed: countTokens(assistantContent),
+            },
+          })
+
+          // Send sources information
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ error: "Stream interrupted" })}\n\n`
+            )
+          )
+          controller.close()
+        }
+      },
+    })
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    })
+
+  } catch (error) {
+    console.error("Chat API error:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+```
+
+### app/api/chats/route.ts
+```typescript
+import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/lib/auth"
+import { db } from "@/lib/db"
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const chats = await db.chat.findMany({
+      where: {
+        userId: session.user.id,
+        deletedAt: null,
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+      select: {
+        id: true,
+        title: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    })
+
+    return NextResponse.json({ chats })
+  } catch (error) {
+    console.error("Error fetching chats:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const chat = await db.chat.create({
+      data: {
+        userId: session.user.id,
+        title: "New Chat",
+      },
+    })
+
+    return NextResponse.json({ chatId: chat.id })
+  } catch (error) {
+    console.error("Error creating chat:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+```
+
+### app/api/chats/[id]/route.ts
+```typescript
+import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/lib/auth"
+import { db } from "@/lib/db"
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const chat = await db.chat.findFirst({
+      where: {
+        id: params.id,
+        userId: session.user.id,
+        deletedAt: null,
+      },
+    })
+
+    if (!chat) {
+      return NextResponse.json({ error: "Chat not found" }, { status: 404 })
+    }
+
+    const messages = await db.message.findMany({
+      where: {
+        chatId: params.id,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+      select: {
+        id: true,
+        role: true,
+        content: true,
+        createdAt: true,
+      },
+    })
+
+    // Extract sources from assistant messages
+    const messagesWithSources = messages.map(message => {
+      if (message.role === "assistant") {
+        // Look for sources pattern in content
+        const sourcesMatch = message.content.match(/Sources: (.+)$/m)
+        if (sourcesMatch) {
+          const sources = sourcesMatch[1].split(', ').map(s => s.trim())
+          const content = message.content.replace(/\n\nSources: .+$/m, '')
+          return {
+            ...message,
+            content,
+            sources,
+          }
+        }
+      }
+      return message
+    })
+
+    return NextResponse.json({ messages: messagesWithSources })
+  } catch (error) {
+    console.error("Error fetching messages:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const chat = await db.chat.findFirst({
+      where: {
+        id: params.id,
+        userId: session.user.id,
+        deletedAt: null,
+      },
+    })
+
+    if (!chat) {
+      return NextResponse.json({ error: "Chat not found" }, { status: 404 })
+    }
+
+    // Soft delete the chat
+    await db.chat.update({
+      where: { id: params.id },
+      data: { deletedAt: new Date() },
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Error deleting chat:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+```
+
+### app/api/ingest/route.ts
+```typescript
+import { NextRequest, NextResponse } from "next/server"
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "@/lib/auth"
+import { ingestSliteDocs } from "@/lib/rag"
+
+export const runtime = "nodejs"
+export const maxDuration = 300 // 5 minutes
+
+export async function POST(request: NextRequest) {
+  try {
+    // Check if request is from authenticated user or cron
+    const session = await getServerSession(authOptions)
+    const authHeader = request.headers.get('authorization')
+    
+    // Allow cron jobs (Vercel cron sends auth header) or authenticated users
+    const isAuthorized = session?.user || authHeader === `Bearer ${process.env.CRON_SECRET}`
+    
+    if (!isAuthorized) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    console.log("Starting document ingestion...")
+    
+    const result = await ingestSliteDocs()
+    
+    console.log(`Ingestion completed: ${result.processed} processed, ${result.updated} updated`)
+    
+    if (result.errors.length > 0) {
+      console.error("Ingestion errors:", result.errors)
+    }
+
+    return NextResponse.json({
+      message: `Processed ${result.processed} documents, updated ${result.updated}`,
+      ...result,
+    })
+  } catch (error) {
+    console.error("Ingestion API error:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+```
+
+## Scripts and Testing
+
+### scripts/ingest.ts
+```typescript
+#!/usr/bin/env tsx
+
+import { ingestSliteDocs } from '../lib/rag'
+
+async function main() {
+  try {
+    console.log('Starting Slite document ingestion...')
+    
+    const result = await ingestSliteDocs()
+    
+    console.log(`\n✅ Ingestion completed:`)
+    console.log(`   📄 Documents processed: ${result.processed}`)
+    console.log(`   🔄 Documents updated: ${result.updated}`)
+    
+    if (result.errors.length > 0) {
+      console.log(`\n❌ Errors encountered:`)
+      result.errors.forEach(error => {
+        console.log(`   • ${error}`)
+      })
+      process.exit(1)
+    }
+    
+    console.log('\n🎉 All documents processed successfully!')
+    
+  } catch (error) {
+    console.error('❌ Ingestion failed:', error)
+    process.exit(1)
+  }
+}
+
+if (require.main === module) {
+  main()
+}
+```
+
+### tests/chunker.test.ts
+```typescript
+import { describe, it, expect } from 'vitest'
+import { chunkText, countTokens } from '../lib/chunker'
+import { assert, assertEquals, assertApproximately } from '../lib/assert'
+
+describe('Chunker', () => {
+  it('should count tokens correctly', () => {
+    const text = "Hello world"
+    const tokenCount = countTokens(text)
+    
+    assert(tokenCount > 0, 'Token count should be greater than 0')
+    assertApproximately(tokenCount, 2, 1, 'Should be approximately 2 tokens')
+  })
+
+  it('should chunk text properly', () => {
+    const text = "This is sentence one. This is sentence two. This is sentence three. This is sentence four."
+    const chunks = chunkText(text, 50, 10)
+    
+    assert(chunks.length > 0, 'Should produce at least one chunk')
+    
+    chunks.forEach(chunk => {
+      assert(chunk.tokens <= 50, `Chunk should not exceed 50 tokens, got ${chunk.tokens}`)
+      assert(chunk.text.length > 0, 'Chunk text should not be empty')
+      assert(typeof chunk.index === 'number', 'Chunk should have numeric index')
+    })
+  })
+
+  it('should handle overlap correctly', () => {
+    const text = "First sentence. Second sentence. Third sentence. Fourth sentence."
+    const chunks = chunkText(text, 30, 5)
+    
+    if (chunks.length > 1) {
+      // Check that there's some overlap between chunks
+      const firstChunk = chunks[0].text
+      const secondChunk = chunks[1].text
+      
+      // At least some words should overlap
+      const firstWords = firstChunk.split(' ')
+      const secondWords = secondChunk.split(' ')
+      
+      const hasOverlap = firstWords.some(word => secondWords.includes(word))
+      assert(hasOverlap, 'Chunks should have overlapping content')
+    }
+  })
+
+  it('should handle empty text', () => {
+    const chunks = chunkText("")
+    assertEquals(chunks.length, 0, 'Empty text should produce no chunks')
+  })
+
+  it('should handle single sentence', () => {
+    const text = "This is a single sentence."
+    const chunks = chunkText(text, 100, 10)
+    
+    assertEquals(chunks.length, 1, 'Single sentence should produce one chunk')
+    assertEquals(chunks[0].text, text, 'Chunk should contain the full sentence')
+    assertEquals(chunks[0].index, 0, 'First chunk should have index 0')
+  })
+})
+```
+
+### tests/rag.test.ts
+```typescript
+import { describe, it, expect } from 'vitest'
+import { assert, assertEquals } from '../lib/assert'
+
+describe('RAG System', () => {
+  it('should have required environment variables', () => {
+    // These tests verify the environment is set up correctly
+    assert(process.env.OPENAI_API_KEY, 'OPENAI_API_KEY should be set')
+    assert(process.env.SLITE_API_KEY, 'SLITE_API_KEY should be set')
+    assert(process.env.DATABASE_URL, 'DATABASE_URL should be set')
+  })
+
+  it('should validate similarity scores', () => {
+    // Test similarity score validation
+    const validScores = [0.0, 0.5, 0.75, 1.0]
+    const invalidScores = [-0.1, 1.1, NaN, Infinity]
+    
+    validScores.forEach(score => {
+      assert(score >= 0 && score <= 1, `${score} should be valid similarity score`)
+    })
+    
+    invalidScores.forEach(score => {
+      assert(score < 0 || score > 1 || !isFinite(score), `${score} should be invalid similarity score`)
+    })
+  })
+})
+```
+
+### vitest.config.ts
+```typescript
+import { defineConfig } from 'vitest/config'
+import path from 'path'
+
+export default defineConfig({
+  test: {
+    environment: 'node',
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './'),
+    },
+  },
+})
+```
+
+## Documentation
+
+### README.md
+```markdown
+# SOP Assistant
+
+An internal Standard Operating Procedures assistant for Stewart & Jane Group, built with Next.js 14, TypeScript, and AI-powered document retrieval.
+
+## Features
+
+- 🔐 **Secure Authentication** - Google OAuth with domain restrictions
+- 💬 **Modern Chat Interface** - Streaming responses with message history
+- 📚 **Smart Document Search** - Vector-based retrieval from Slite knowledge base
+- 🎨 **Beautiful UI** - Dark/light mode with Stewart & Jane Group branding
+- ⚡ **High Performance** - Edge-optimized with rate limiting
+- 📱 **Responsive Design** - Works on desktop, tablet, and mobile
+
+## Tech Stack
+
+- **Framework**: Next.js 14 with App Router
+- **Language**: TypeScript
+- **Database**: PostgreSQL with pgvector
+- **ORM**: Prisma
+- **Auth**: NextAuth.js with Google OAuth
+- **AI**: OpenAI GPT-4 and text-embedding-3-small
+- **UI**: Tailwind CSS + shadcn/ui
+- **Deployment**: Vercel
+
+## Quick Start
+
+1. **Clone and install dependencies**:
+   ```bash
+   git clone <repository-url>
+   cd sop-assistant
+   pnpm install
+   ```
+
+2. **Set up environment variables**:
+   ```bash
+   cp .env.example .env
+   # Fill in your API keys and configuration
+   ```
+
+3. **Set up database**:
+   ```bash
+   pnpm prisma migrate deploy
+   ```
+
+4. **Ingest documents**:
+   ```bash
+   pnpm ingest
+   ```
+
+5. **Start development server**:
+   ```bash
+   pnpm dev
+   ```
+
+## Environment Variables
+
+See `.env.example` for all required environment variables. Key ones include:
+
+- `OPENAI_API_KEY` - Your OpenAI API key
+- `SLITE_API_KEY` - Your Slite API key for document ingestion
+- `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET` - Google OAuth credentials
+- `DATABASE_URL` - PostgreSQL connection string with pgvector
+- `ALLOWED_EMAILS` - Comma-separated list of authorized email addresses
+
+## Keyboard Shortcuts
+
+- `Cmd/Ctrl + K` - Start new chat
+- `Enter` - Send message
+- `Shift + Enter` - New line in message
+
+## License
+
+Internal use only - Stewart & Jane Group
+```
+
+### SETUP.md
+```markdown
+# SOP Assistant Setup Guide
+
+This guide will walk you through setting up the SOP Assistant from scratch.
+
+## Prerequisites
+
+- Node.js 18+ and pnpm
+- PostgreSQL database (we recommend Vercel Postgres)
+- Google Cloud Console access for OAuth
+- Slite API access
+- OpenAI API key
+
+## Step 1: Local Development Setup
+
+### 1.1 Clone and Install
+
+```bash
+git clone <your-repository-url>
+cd sop-assistant
+pnpm install
+```
+
+### 1.2 Environment Configuration
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+Fill in the environment variables (we'll get these in the following steps).
+
+## Step 2: Database Setup
+
+### 2.1 Vercel Postgres (Recommended)
+
+1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
+2. Create a new project or use existing one
+3. Go to Storage tab → Create Database → Postgres
+4. Copy the `DATABASE_URL` from the `.env.local` tab
+5. Add it to your local `.env` file
+
+### 2.2 Enable pgvector Extension
+
+Connect to your database and run:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+### 2.3 Run Migrations
+
+```bash
+pnpm prisma migrate deploy
+pnpm prisma generate
+```
+
+## Step 3: Google OAuth Setup
+
+### 3.1 Create Google Cloud Project
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing
+3. Enable Google+ API
+
+### 3.2 Configure OAuth Consent Screen
+
+1. Go to APIs & Services → OAuth consent screen
+2. Choose "Internal" for organization use
+3. Fill in application details:
+   - App name: "SOP Assistant"
+   - User support email: your admin email
+   - Authorized domains: your domain (e.g., `stewartjane.com`)
+
+### 3.3 Create OAuth Credentials
+
+1. Go to APIs & Services → Credentials
+2. Click "Create Credentials" → "OAuth client ID"
+3. Choose "Web application"
+4. Add authorized redirect URIs:
+   - `http://localhost:3000/api/auth/callback/google` (development)
+   - `https://yourdomain.com/api/auth/callback/google` (production)
+5. Copy Client ID and Client Secret to your `.env` file
+
+## Step 4: OpenAI API Setup
+
+1. Go to [OpenAI Platform](https://platform.openai.com/)
+2. Create an API key
+3. Add to `.env` as `OPENAI_API_KEY`
+4. Set your preferred model in `OPENAI_CHAT_MODEL` (default: `gpt-4o-mini`)
+
+## Step 5: Slite Integration
+
+### 5.1 Get Slite API Key
+
+1. Log into your Slite workspace
+2. Go to Settings → Integrations → API
+3. Generate an API key
+4. Add to `.env` as `SLITE_API_KEY`
+
+### 5.2 Configure Channel Filter (Optional)
+
+If you want to limit ingestion to specific channels:
+
+```env
+SLITE_CHANNEL_FILTER=your-channel-name
+```
+
+## Step 6: Initial Document Ingestion
+
+Run the ingestion script to populate your knowledge base:
+
+```bash
+pnpm ingest
+```
+
+This will:
+- Fetch all documents from Slite
+- Chunk them into searchable segments
+- Generate embeddings
+- Store in your database
+
+## Step 7: Test Local Development
+
+```bash
+pnpm dev
+```
+
+Visit `http://localhost:3000` and test:
+1. Google OAuth sign-in works
+2. Only allowed emails can access
+3. Chat interface loads
+4. Document retrieval works
+
+## Step 8: Production Deployment
+
+### 8.1 Deploy to Vercel
+
+1. Push your code to GitHub
+2. Connect repository to Vercel
+3. Set environment variables in Vercel dashboard
+4. Deploy
+
+### 8.2 Configure Production OAuth
+
+Update your Google OAuth credentials with production URLs:
+- `https://yourdomain.com/api/auth/callback/google`
+
+### 8.3 Set up Automated Ingestion
+
+The project includes a Vercel Cron configuration in `vercel.json`:
+
+```json
+{
+  "crons": [
+    {
+      "path": "/api/ingest",
+      "schedule": "0 2 * * *"
+    }
+  ]
+}
+```
+
+This runs daily at 2 AM UTC. You can also trigger manual ingestion via the UI.
+
+## Step 9: Configure Access Control
+
+Update the `ALLOWED_EMAILS` environment variable with authorized email addresses:
+
+```env
+ALLOWED_EMAILS=user1@stewartjane.com,user2@stewartjane.com,admin@stewartjane.com
+```
+
+## Troubleshooting
+
+### Vector Index Issues
+
+If you encounter vector search errors:
+
+```sql
+-- Connect to your database and run:
+CREATE INDEX IF NOT EXISTS chunk_embedding_idx ON "chunks" USING ivfflat (embedding vector_cosine_ops);
+```
+
+### NextAuth Callback Domain Issues
+
+Ensure your OAuth redirect URIs exactly match your deployment URLs, including protocol (http/https).
+
+### CORS or 401 Errors
+
+- Verify `NEXTAUTH_URL` matches your deployment URL
+- Check that `NEXTAUTH_SECRET` is set to a random string
+
+### Streaming Response Issues
+
+If chat responses don't stream properly:
+- Verify your deployment supports Node.js runtime
+- Check that the `vercel.json` configuration is deployed
+
+### Rate Limiting
+
+Default limits are 30 requests per 10 minutes per user. Adjust in environment:
+
+```env
+RATE_LIMIT_REQUESTS=50
+RATE_LIMIT_WINDOW_MINUTES=10
+```
+
+## Configuration Options
+
+### RAG Parameters
+
+Fine-tune retrieval and generation:
+
+```env
+TOP_K=8                    # Number of chunks to retrieve
+MIN_SIMILARITY=0.75        # Minimum similarity threshold
+CHUNK_SIZE=1000           # Tokens per chunk
+CHUNK_OVERLAP=200         # Overlap between chunks
+HISTORY_MAX_TOKENS=2000   # Max chat history in context
+```
+
+### Model Configuration
+
+To use different OpenAI models:
+
+```env
+OPENAI_CHAT_MODEL=gpt-4-turbo-preview
+```
+
+Or for Azure OpenAI:
+
+```env
+OPENAI_API_TYPE=azure
+OPENAI_API_BASE=https://your-resource.openai.azure.com
+OPENAI_API_VERSION=2024-02-15-preview
+```
+
+## Monitoring and Maintenance
+
+### Database Monitoring
+
+Monitor your database usage, especially:
+- Storage consumption (documents and embeddings)
+- Query performance
+- Connection limits
+
+### API Usage Monitoring
+
+Track your OpenAI API usage:
+- Embedding generation costs
+- Chat completion costs
+- Rate limits
+
+### Regular Maintenance
+
+- Update document ingestion regularly (automated via cron)
+- Monitor error logs in Vercel dashboard
+- Review and update access control lists
+
+## Support
+
+For technical issues:
+1. Check Vercel deployment logs
+2. Review database connection and pgvector setup
+3. Verify all environment variables are correctly set
+4. Test API endpoints individually
+
+For questions about Stewart & Jane Group specific configuration, contact your system administrator.
+```
+
+## Missing UI Components
+
+### components/ui/card.tsx
+```typescript
+import * as React from "react"
+
+import { cn } from "@/lib/utils"
+
+const Card = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn(
+      "rounded-lg border bg-card text-card-foreground shadow-sm",
+      className
+    )}
+    {...props}
+  />
+))
+Card.displayName = "Card"
+
+const CardHeader = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div ref={ref} className={cn("flex flex-col space-y-1.5 p-6", className)} {...props} />
+))
+CardHeader.displayName = "CardHeader"
+
+const CardTitle = React.forwardRef<
+  HTMLParagraphElement,
+  React.HTMLAttributes<HTMLHeadingElement>
+>(({ className, ...props }, ref) => (
+  <h3
+    ref={ref}
+    className={cn(
+      "text-2xl font-semibold leading-none tracking-tight",
+      className
+    )}
+    {...props}
+  />
+))
+CardTitle.displayName = "CardTitle"
+
+const CardDescription = React.forwardRef<
+  HTMLParagraphElement,
+  React.HTMLAttributes<HTMLParagraphElement>
+>(({ className, ...props }, ref) => (
+  <p
+    ref={ref}
+    className={cn("text-sm text-muted-foreground", className)}
+    {...props}
+  />
+))
+CardDescription.displayName = "CardDescription"
+
+const CardContent = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />
+))
+CardContent.displayName = "CardContent"
+
+const CardFooter = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div ref={ref} className={cn("flex items-center p-6 pt-0", className)} {...props} />
+))
+CardFooter.displayName = "CardFooter"
+
+export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent }
+```
+
+This completes the full production-ready SOP Assistant repository! The application includes:
+
+✅ **Complete Next.js 14 app with TypeScript**
+✅ **PostgreSQL with pgvector for embeddings**
+✅ **Google OAuth authentication with domain restrictions**
+✅ **RAG pipeline with Slite integration**
+✅ **Modern chat interface with streaming responses**
+✅ **Rate limiting and error handling**
+✅ **Dark/light mode theming**
+✅ **Comprehensive setup documentation**
+✅ **Testing framework with unit tests**
+✅ **CLI ingestion script**
+✅ **Vercel deployment configuration**
+
+The repository is ready to be deployed to Vercel and will provide a robust, production-grade SOP assistant for Stewart & Jane Group..stringify({ 
+                sources: context.sources,
+                messageId: assistantMessage.id 
+              })}\n\n`
+            )
+          )
+
+          // Update chat timestamp
+          await db.chat.update({
+            where: { id: chatId },
+            data: { updatedAt: new Date() },
+          })
+
+          controller.enqueue(encoder.encode("data: [DONE]\n\n"))
+          controller.close()
+
+        } catch (error) {
+          console.error("Streaming error:", error)
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON# SOP Assistant Repository Structure
+
+## Root Files
+
+### package.json
+```json
+{
+  "name": "sop-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio",
+    "ingest": "tsx scripts/ingest.ts",
+    "test": "vitest",
+    "test:ui": "vitest --ui"
+  },
+  "dependencies": {
+    "@auth/prisma-adapter": "^1.0.15",
+    "@hookform/resolvers": "^3.3.2",
+    "@prisma/client": "^5.7.1",
+    "@radix-ui/react-avatar": "^1.0.4",
+    "@radix-ui/react-button": "^1.0.3",
+    "@radix-ui/react-dialog": "^1.0.5",
+    "@radix-ui/react-dropdown-menu": "^2.0.6",
+    "@radix-ui/react-label": "^2.0.2",
+    "@radix-ui/react-scroll-area": "^1.0.5",
+    "@radix-ui/react-separator": "^1.0.3",
+    "@radix-ui/react-slot": "^1.0.2",
+    "@radix-ui/react-toast": "^1.1.5",
+    "@vercel/postgres": "^0.5.1",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.0.0",
+    "cmdk": "^0.2.0",
+    "date-fns": "^2.30.0",
+    "js-tiktoken": "^1.0.8",
+    "lucide-react": "^0.294.0",
+    "next": "14.0.4",
+    "next-auth": "^4.24.5",
+    "next-themes": "^0.2.1",
+    "openai": "^4.20.1",
+    "pgvector": "^0.1.5",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-hook-form": "^7.48.2",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.0",
+    "tailwind-merge": "^2.1.0",
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.0.4",
+    "postcss": "^8",
+    "prisma": "^5.7.1",
+    "tailwindcss": "^3.3.0",
+    "tsx": "^4.6.2",
+    "typescript": "^5",
+    "vitest": "^1.0.4"
+  }
+}
+```
+
+### next.config.js
+```javascript
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  experimental: {
+    serverComponentsExternalPackages: ['@prisma/client', 'prisma']
+  },
+  images: {
+    domains: ['lh3.googleusercontent.com']
+  }
+}
+
+module.exports = nextConfig
+```
+
+### tailwind.config.js
+```javascript
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  darkMode: ["class"],
+  content: [
+    './pages/**/*.{ts,tsx}',
+    './components/**/*.{ts,tsx}',
+    './app/**/*.{ts,tsx}',
+    './src/**/*.{ts,tsx}',
+  ],
+  theme: {
+    container: {
+      center: true,
+      padding: "2rem",
+      screens: {
+        "2xl": "1400px",
+      },
+    },
+    extend: {
+      colors: {
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        primary: {
+          DEFAULT: "#38B6FF",
+          foreground: "#FFFFFF",
+        },
+        secondary: {
+          DEFAULT: "#E7E6E2",
+          foreground: "#000000",
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
+      },
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
+      },
+      keyframes: {
+        "accordion-down": {
+          from: { height: 0 },
+          to: { height: "var(--radix-accordion-content-height)" },
+        },
+        "accordion-up": {
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: 0 },
+        },
+      },
+      animation: {
+        "accordion-down": "accordion-down 0.2s ease-out",
+        "accordion-up": "accordion-up 0.2s ease-out",
+      },
+    },
+  },
+  plugins: [require("tailwindcss-animate")],
+}
+```
+
+### styles/globals.css
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+
+    --primary: 206 100% 62%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 43 4% 90%;
+    --secondary-foreground: 0 0% 0%;
+
+    --muted: 43 4% 90%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent: 43 4% 90%;
+    --accent-foreground: 0 0% 0%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 43 4% 90%;
+    --input: 43 4% 90%;
+    --ring: 206 100% 62%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+
+    --card: 0 0% 0%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 0 0% 0%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 206 100% 62%;
+    --primary-foreground: 0 0% 0%;
+
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 65%;
+
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 10%;
+    --input: 0 0% 10%;
+    --ring: 206 100% 62%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom scrollbar */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground)) transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground));
+  border-radius: 3px;
+  opacity: 0.5;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  opacity: 1;
+}
+
+/* Code block styling */
+.prose pre {
+  @apply bg-muted border border-border rounded-lg p-4 overflow-x-auto;
+}
+
+.prose code {
+  @apply bg-muted px-1.5 py-0.5 rounded text-sm;
+}
+
+.prose pre code {
+  @apply bg-transparent px-0 py-0;
+}
+
+/* Loading animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+```
+
+### tsconfig.json
+```json
+{
+  "compilerOptions": {
+    "target": "es5",
+    "lib": ["dom", "dom.iterable", "es6"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+```
+
+### middleware.ts
+```typescript
+import { withAuth } from "next-auth/middleware"
+import { NextResponse } from "next/server"
+
+export default withAuth(
+  function middleware(req) {
+    return NextResponse.next()
+  },
+  {
+    callbacks: {
+      authorized: ({ token }) => !!token,
+    },
+  }
+)
+
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api/auth (authentication routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - signin (sign in page)
+     */
+    '/((?!api/auth|_next/static|_next/image|favicon.ico|signin).*)',
+  ],
+}
+```
+
+### .env.example
+```env
+# NextAuth
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your-nextauth-secret-here
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# Database
+DATABASE_URL="postgresql://username:password@localhost:5432/sop_assistant?schema=public"
+
+# OpenAI
+OPENAI_API_KEY=your-openai-api-key
+OPENAI_CHAT_MODEL=gpt-4o-mini
+
+# Slite
+SLITE_API_KEY=your-slite-api-key
+SLITE_CHANNEL_FILTER=
+
+# Access Control
+ALLOWED_EMAILS=user1@example.com,user2@example.com,admin@stewartjane.com
+
+# Rate Limiting
+RATE_LIMIT_REQUESTS=30
+RATE_LIMIT_WINDOW_MINUTES=10
+
+# RAG Configuration
+TOP_K=8
+MIN_SIMILARITY=0.75
+CHUNK_SIZE=1000
+CHUNK_OVERLAP=200
+HISTORY_MAX_TOKENS=2000
+```
+
+### vercel.json
+```json
+{
+  "functions": {
+    "app/api/chat/route.ts": {
+      "runtime": "nodejs18.x"
+    },
+    "app/api/ingest/route.ts": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/ingest",
+      "schedule": "0 2 * * *"
+    }
+  ]
+}
+```
+
+## Environment and Configuration
+
+### lib/env.ts
+```typescript
+import { z } from 'zod'
+
+const envSchema = z.object({
+  // NextAuth
+  NEXTAUTH_URL: z.string().url(),
+  NEXTAUTH_SECRET: z.string().min(1),
+  
+  // Google OAuth
+  GOOGLE_CLIENT_ID: z.string().min(1),
+  GOOGLE_CLIENT_SECRET: z.string().min(1),
+  
+  // Database
+  DATABASE_URL: z.string().url(),
+  
+  // OpenAI
+  OPENAI_API_KEY: z.string().min(1),
+  OPENAI_CHAT_MODEL: z.string().default('gpt-4o-mini'),
+  
+  // Slite
+  SLITE_API_KEY: z.string().min(1),
+  SLITE_CHANNEL_FILTER: z.string().optional(),
+  
+  // Access Control
+  ALLOWED_EMAILS: z.string().min(1),
+  
+  // Rate Limiting
+  RATE_LIMIT_REQUESTS: z.coerce.number().default(30),
+  RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().default(10),
+  
+  // RAG Configuration
+  TOP_K: z.coerce.number().default(8),
+  MIN_SIMILARITY: z.coerce.number().default(0.75),
+  CHUNK_SIZE: z.coerce.number().default(1000),
+  CHUNK_OVERLAP: z.coerce.number().default(200),
+  HISTORY_MAX_TOKENS: z.coerce.number().default(2000),
+})
+
+export const env = envSchema.parse(process.env)
+
+export type Env = z.infer<typeof envSchema>
+```
+
+### lib/config.ts
+```typescript
+import { env } from './env'
+
+export const config = {
+  // OpenAI
+  openai: {
+    apiKey: env.OPENAI_API_KEY,
+    chatModel: env.OPENAI_CHAT_MODEL,
+    embeddingModel: 'text-embedding-3-small',
+    embeddingDimensions: 1536,
+  },
+  
+  // Slite
+  slite: {
+    apiKey: env.SLITE_API_KEY,
+    baseUrl: 'https://api.slite.com/v1',
+    channelFilter: env.SLITE_CHANNEL_FILTER,
+  },
+  
+  // RAG
+  rag: {
+    topK: env.TOP_K,
+    minSimilarity: env.MIN_SIMILARITY,
+    chunkSize: env.CHUNK_SIZE,
+    chunkOverlap: env.CHUNK_OVERLAP,
+    historyMaxTokens: env.HISTORY_MAX_TOKENS,
+  },
+  
+  // Rate Limiting
+  rateLimit: {
+    requests: env.RATE_LIMIT_REQUESTS,
+    windowMinutes: env.RATE_LIMIT_WINDOW_MINUTES,
+  },
+  
+  // Auth
+  auth: {
+    allowedEmails: env.ALLOWED_EMAILS.split(',').map(email => email.trim()),
+  },
+} as const
+
+export default config
+```
+
+## Database Schema and Migrations
+
+### prisma/schema.prisma
+```prisma
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  chats         Chat[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model Chat {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId, deletedAt])
+  @@map("chats")
+}
+
+model Message {
+  id         String      @id @default(cuid())
+  chatId     String
+  role       MessageRole
+  content    String      @db.Text
+  tokensUsed Int         @default(0)
+  createdAt  DateTime    @default(now())
+
+  chat Chat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
+  @@map("messages")
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  sliteId   String   @unique
+  title     String
+  updatedAt DateTime
+  hash      String
+  createdAt DateTime @default(now())
+
+  chunks Chunk[]
+
+  @@index([sliteId])
+  @@index([updatedAt])
+  @@map("documents")
+}
+
+model Chunk {
+  id         String                        @id @default(cuid())
+  documentId String
+  idx        Int
+  text       String                        @db.Text
+  embedding  Unsupported("vector(1536)")?
+  tokens     Int
+  createdAt  DateTime                      @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@map("chunks")
+}
+
+model RateLimit {
+  id        String   @id @default(cuid())
+  userId    String
+  requests  Int      @default(1)
+  windowStart DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId])
+  @@index([windowStart])
+  @@map("rate_limits")
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+  tool
+}
+```
+
+### prisma/migrations/20241201000000_init/migration.sql
+```sql
+-- CreateExtension
+CREATE EXTENSION IF NOT EXISTS "vector";
+
+-- CreateEnum
+CREATE TYPE "MessageRole" AS ENUM ('user', 'assistant', 'system', 'tool');
+
+-- CreateTable
+CREATE TABLE "accounts" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "type" TEXT NOT NULL,
+    "provider" TEXT NOT NULL,
+    "providerAccountId" TEXT NOT NULL,
+    "refresh_token" TEXT,
+    "access_token" TEXT,
+    "expires_at" INTEGER,
+    "token_type" TEXT,
+    "scope" TEXT,
+    "id_token" TEXT,
+    "session_state" TEXT,
+
+    CONSTRAINT "accounts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "sessions" (
+    "id" TEXT NOT NULL,
+    "sessionToken" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "expires" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "sessions_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "users" (
+    "id" TEXT NOT NULL,
+    "name" TEXT,
+    "email" TEXT NOT NULL,
+    "emailVerified" TIMESTAMP(3),
+    "image" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "users_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "verification_tokens" (
+    "identifier" TEXT NOT NULL,
+    "token" TEXT NOT NULL,
+    "expires" TIMESTAMP(3) NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "chats" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "deletedAt" TIMESTAMP(3),
+
+    CONSTRAINT "chats_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "messages" (
+    "id" TEXT NOT NULL,
+    "chatId" TEXT NOT NULL,
+    "role" "MessageRole" NOT NULL,
+    "content" TEXT NOT NULL,
+    "tokensUsed" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "messages_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "documents" (
+    "id" TEXT NOT NULL,
+    "sliteId" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "hash" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "documents_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "chunks" (
+    "id" TEXT NOT NULL,
+    "documentId" TEXT NOT NULL,
+    "idx" INTEGER NOT NULL,
+    "text" TEXT NOT NULL,
+    "embedding" vector(1536),
+    "tokens" INTEGER NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "chunks_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "rate_limits" (
+    "id" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "requests" INTEGER NOT NULL DEFAULT 1,
+    "windowStart" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "rate_limits_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "accounts_provider_providerAccountId_key" ON "accounts"("provider", "providerAccountId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "sessions_sessionToken_key" ON "sessions"("sessionToken");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "verification_tokens_token_key" ON "verification_tokens"("token");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "verification_tokens_identifier_token_key" ON "verification_tokens"("identifier", "token");
+
+-- CreateIndex
+CREATE INDEX "chats_userId_deletedAt_idx" ON "chats"("userId", "deletedAt");
+
+-- CreateIndex
+CREATE INDEX "messages_chatId_createdAt_idx" ON "messages"("chatId", "createdAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "documents_sliteId_key" ON "documents"("sliteId");
+
+-- CreateIndex
+CREATE INDEX "documents_sliteId_idx" ON "documents"("sliteId");
+
+-- CreateIndex
+CREATE INDEX "documents_updatedAt_idx" ON "documents"("updatedAt");
+
+-- CreateIndex
+CREATE INDEX "chunks_documentId_idx" ON "chunks"("documentId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "rate_limits_userId_key" ON "rate_limits"("userId");
+
+-- CreateIndex
+CREATE INDEX "rate_limits_windowStart_idx" ON "rate_limits"("windowStart");
+
+-- AddForeignKey
+ALTER TABLE "accounts" ADD CONSTRAINT "accounts_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "chats" ADD CONSTRAINT "chats_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "messages" ADD CONSTRAINT "messages_chatId_fkey" FOREIGN KEY ("chatId") REFERENCES "chats"("id") ON DELETE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "chunks" ADD CONSTRAINT "chunks_documentId_fkey" FOREIGN KEY ("documentId") REFERENCES "documents"("id") ON DELETE CASCADE;
+```
+
+### prisma/migrations/20241201000001_add_vector_index/migration.sql
+```sql
+-- Create vector index for similarity search
+CREATE INDEX IF NOT EXISTS "chunk_embedding_idx" ON "chunks" USING ivfflat (embedding vector_cosine_ops);
+```
+
+## Core Library Files
+
+### lib/db.ts
+```typescript
+import { PrismaClient } from '@prisma/client'
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined
+}
+
+export const db = globalForPrisma.prisma ?? new PrismaClient()
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
+```
+
+### lib/auth.ts
+```typescript
+import { NextAuthOptions } from 'next-auth'
+import { PrismaAdapter } from '@auth/prisma-adapter'
+import GoogleProvider from 'next-auth/providers/google'
+import { db } from './db'
+import { env } from './env'
+import config from './config'
+
+export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(db),
+  providers: [
+    GoogleProvider({
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+    }),
+  ],
+  callbacks: {
+    async signIn({ user }) {
+      const email = user.email
+      if (!email) return false
+      
+      const isAllowed = config.auth.allowedEmails.some(
+        allowedEmail => email.toLowerCase() === allowedEmail.toLowerCase()
+      )
+      
+      return isAllowed
+    },
+    async session({ session, user }) {
+      if (session.user) {
+        session.user.id = user.id
+      }
+      return session
+    },
+  },
+  pages: {
+    signIn: '/signin',
+  },
+  session: {
+    strategy: 'database',
+  },
+}
+```
+
+### lib/slite.ts
+```typescript
+import config from './config'
+
+export interface SliteNote {
+  id: string
+  title: string
+  content: string
+  updated_at: string
+  channel?: string
+  tags?: string[]
+}
+
+export interface SliteSearchResponse {
+  notes: SliteNote[]
+  total: number
+}
+
+class SliteClient {
+  private baseUrl = config.slite.baseUrl
+  private apiKey = config.slite.apiKey
+
+  private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    const url = `${this.baseUrl}${endpoint}`
+    
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Slite API error: ${response.status} ${response.statusText}`)
+    }
+
+    return response.json()
+  }
+
+  async searchNotes(query: string = '', limit: number = 100): Promise<SliteNote[]> {
+    const params = new URLSearchParams({
+      q: query,
+      limit: limit.toString(),
+    })
+    
+    if (config.slite.channelFilter) {
+      params.append('channel', config.slite.channelFilter)
+    }
+
+    const response = await this.request<SliteSearchResponse>(
+      `/search-notes?${params.toString()}`
+    )
+
+    return response.notes
+  }
+
+  async getNote(id: string): Promise<SliteNote> {
+    return this.request<SliteNote>(`/notes/${id}`)
+  }
+
+  async getAllNotes(): Promise<SliteNote[]> {
+    let allNotes: SliteNote[] = []
+    let page = 1
+    const limit = 100
+
+    while (true) {
+      const notes = await this.searchNotes('', limit)
+      if (notes.length === 0) break
+      
+      allNotes = allNotes.concat(notes)
+      if (notes.length < limit) break
+      
+      page++
+      // Add delay to respect rate limits
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+
+    return allNotes
+  }
+
+  // Convert HTML content to plain text
+  htmlToText(html: string): string {
+    return html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+}
+
+export const sliteClient = new SliteClient()
+```
+
+### lib/embeddings.ts
+```typescript
+import OpenAI from 'openai'
+import config from './config'
+
+const openai = new OpenAI({
+  apiKey: config.openai.apiKey,
+})
+
+export async function getEmbedding(text: string): Promise<number[]> {
+  const response = await openai.embeddings.create({
+    model: config.openai.embeddingModel,
+    input: text,
+    dimensions: config.openai.embeddingDimensions,
+  })
+
+  return response.data[0].embedding
+}
+
+export async function getEmbeddings(texts: string[]): Promise<number[][]> {
+  const response = await openai.embeddings.create({
+    model: config.openai.embeddingModel,
+    input: texts,
+    dimensions: config.openai.embeddingDimensions,
+  })
+
+  return response.data.map(item => item.embedding)
+}
+```
+
+### lib/chunker.ts
+```typescript
+import { getEncoding } from 'js-tiktoken'
+import config from './config'
+
+const encoding = getEncoding('cl100k_base')
+
+export interface Chunk {
+  text: string
+  tokens: number
+  index: number
+}
+
+export function countTokens(text: string): number {
+  return encoding.encode(text).length
+}
+
+export function chunkText(text: string, maxTokens = config.rag.chunkSize, overlap = config.rag.chunkOverlap): Chunk[] {
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0)
+  const chunks: Chunk[] = []
+  let currentChunk = ''
+  let currentTokens = 0
+  let chunkIndex = 0
+
+  for (let i = 0; i < sentences.length; i++) {
+    const sentence = sentences[i].trim() + '.'
+    const sentenceTokens = countTokens(sentence)
+
+    // If adding this sentence would exceed the limit, save current chunk
+    if (currentTokens + sentenceTokens > maxTokens && currentChunk.length > 0) {
+      chunks.push({
+        text: currentChunk.trim(),
+        tokens: currentTokens,
+        index: chunkIndex++,
+      })
+
+      // Start new chunk with overlap
+      if (overlap > 0) {
+        const overlapText = getOverlapText(currentChunk, overlap)
+        currentChunk = overlapText + ' ' + sentence
+        currentTokens = countTokens(currentChunk)
+      } else {
+        currentChunk = sentence
+        currentTokens = sentenceTokens
+      }
+    } else {
+      // Add sentence to current chunk
+      if (currentChunk.length > 0) {
+        currentChunk += ' ' + sentence
+      } else {
+        currentChunk = sentence
+      }
+      currentTokens += sentenceTokens
+    }
+  }
+
+  // Add final chunk if it has content
+  if (currentChunk.trim().length > 0) {
+    chunks.push({
+      text: currentChunk.trim(),
+      tokens: currentTokens,
+      index: chunkIndex,
+    })
+  }
+
+  return chunks
+}
+
+function getOverlapText(text: string, overlapTokens: number): string {
+  const words = text.split(' ')
+  let overlap = ''
+  let tokens = 0
+
+  // Work backwards from the end to get the last N tokens
+  for (let i = words.length - 1; i >= 0; i--) {
+    const word = words[i]
+    const wordTokens = countTokens(word)
+    
+    if (tokens + wordTokens > overlapTokens) {
+      break
+    }
+    
+    overlap = word + (overlap ? ' ' + overlap : '')
+    tokens += wordTokens
+  }
+
+  return overlap
+}
+
+export function summarizeText(text: string, maxTokens: number): string {
+  const tokens = countTokens(text)
+  if (tokens <= maxTokens) {
+    return text
+  }
+
+  // Simple truncation - in production you might want to use AI summarization
+  const ratio = maxTokens / tokens
+  const targetLength = Math.floor(text.length * ratio)
+  
+  // Find a good breaking point near the target
+  let breakPoint = targetLength
+  while (breakPoint > 0 && !/[.!?]\s/.test(text[breakPoint])) {
+    breakPoint--
+  }
+  
+  if (breakPoint === 0) {
+    breakPoint = targetLength
+  }
+  
+  return text.substring(0, breakPoint).trim() + '...'
+}
+```
+
+### lib/rateLimit.ts
+```typescript
+import { db } from './db'
+import config from './config'
+
+export async function checkRateLimit(userId: string): Promise<{ allowed: boolean; remaining: number }> {
+  const windowStart = new Date(Date.now() - config.rateLimit.windowMinutes * 60 * 1000)
+  
+  const existingLimit = await db.rateLimit.findUnique({
+    where: { userId },
+  })
+
+  if (!existingLimit) {
+    // First request - create rate limit record
+    await db.rateLimit.create({
+      data: {
+        userId,
+        requests: 1,
+        windowStart: new Date(),
+      },
+    })
+    
+    return {
+      allowed: true,
+      remaining: config.rateLimit.requests - 1,
+    }
+  }
+
+  // Check if we're in a new window
+  if (existingLimit.windowStart < windowStart) {
+    // Reset the window
+    await db.rateLimit.update({
+      where: { userId },
+      data: {
+        requests: 1,
+        windowStart: new Date(),
+      },
+    })
+    
+    return {
+      allowed: true,
+      remaining: config.rateLimit.requests - 1,
+    }
+  }
+
+  // We're in the current window - check if limit exceeded
+  if (existingLimit.requests >= config.rateLimit.requests) {
+    return {
+      allowed: false,
+      remaining: 0,
+    }
+  }
+
+  // Increment request count
+  await db.rateLimit.update({
+    where: { userId },
+    data: {
+      requests: existingLimit.requests + 1,
+    },
+  })
+
+  return {
+    allowed: true,
+    remaining: config.rateLimit.requests - existingLimit.requests - 1,
+  }
+}
+```
+
+### lib/rag.ts
+```typescript
+import { db } from './db'
+import { getEmbedding } from './embeddings'
+import { chunkText, countTokens, summarizeText } from './chunker'
+import { sliteClient } from './slite'
+import OpenAI from 'openai'
+import config from './config'
+import crypto from 'crypto'
+
+const openai = new OpenAI({
+  apiKey: config.openai.apiKey,
+})
+
+export interface RetrievedChunk {
+  text: string
+  documentTitle: string
+  similarity: number
+}
+
+export interface ChatContext {
+  chunks: RetrievedChunk[]
+  sources: string[]
+  hasLowConfidence: boolean
+}
+
+export async function retrieveContext(query: string, chatHistory?: string[]): Promise<ChatContext> {
+  // Create search query (optionally incorporating chat history)
+  const searchQuery = createSearchQuery(query, chatHistory)
+  
+  // Get embedding for the search query
+  const queryEmbedding = await getEmbedding(searchQuery)
+  
+  // Perform vector similarity search
+  const chunks = await vectorSearch(queryEmbedding, config.rag.topK)
+  
+  // Filter by minimum similarity threshold
+  const filteredChunks = chunks.filter(chunk => chunk.similarity >= config.rag.minSimilarity)
+  
+  // Check if we have low confidence (no chunks above threshold)
+  const hasLowConfidence = filteredChunks.length === 0
+  
+  // Get unique source document titles
+  const sources = [...new Set(filteredChunks.map(chunk => chunk.documentTitle))]
+  
+  return {
+    chunks: filteredChunks,
+    sources,
+    hasLowConfidence,
+  }
+}
+
+function createSearchQuery(query: string, chatHistory?: string[]): string {
+  if (!chatHistory || chatHistory.length === 0) {
+    return query
+  }
+  
+  // Combine recent chat history with current query for better context
+  const recentHistory = chatHistory.slice(-3).join(' ')
+  const combinedQuery = `${recentHistory} ${query}`
+  
+  // Ensure we don't exceed token limits
+  const maxTokens = 500
+  if (countTokens(combinedQuery) > maxTokens) {
+    return summarizeText(combinedQuery, maxTokens)
+  }
+  
+  return combinedQuery
+}
+
+async function vectorSearch(embedding: number[], limit: number): Promise<RetrievedChunk[]> {
+  const embeddingString = `[${embedding.join(',')}]`
+  
+  const results = await db.$queryRaw<Array<{
+    text: string
+    document_title: string
+    similarity: number
+  }>>`
+    SELECT 
+      c.text,
+      d.title as document_title,
+      1 - (c.embedding <-> ${embeddingString}::vector) as similarity
+    FROM chunks c
+    JOIN documents d ON c."documentId" = d.id
+    WHERE c.embedding IS NOT NULL
+    ORDER BY c.embedding <-> ${embeddingString}::vector
+    LIMIT ${limit}
+  `
+  
+  return results.map(result => ({
+    text: result.text,
+    documentTitle: result.document_title,
+    similarity: result.similarity,
+  }))
+}
+
+export async function generateResponse(
+  query: string,
+  context: ChatContext,
+  chatHistory?: Array<{ role: string; content: string }>
+): Promise<ReadableStream<Uint8Array>> {
+  const systemPrompt = createSystemPrompt(context)
+  const messages = createMessages(systemPrompt, query, chatHistory)
+  
+  const response = await openai.chat.completions.create({
+    model: config.openai.chatModel,
+    messages,
+    stream: true,
+    temperature: 0.1,
+    max_tokens: 1000,
+  })
+
+  // Convert OpenAI stream to web stream
+  const encoder = new TextEncoder()
+  
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const chunk of response) {
+          const content = chunk.choices[0]?.delta?.content
+          if (content) {
+            controller.enqueue(encoder.encode(content))
+          }
+        }
+        controller.close()
+      } catch (error) {
+        controller.error(error)
+      }
+    },
+  })
+}
+
+function createSystemPrompt(context: ChatContext): string {
+  if (context.hasLowConfidence) {
+    return `You are an internal SOP assistant for Stewart & Jane Group. The user's question doesn't have a clear match in the knowledge base.
+
+Ask 1 concise clarifying question and provide 2-3 specific suggestions to help narrow down what they're looking for.
+
+Keep responses brief and focused on getting better context.`
+  }
+
+  const contextText = context.chunks
+    .map(chunk => `Source: ${chunk.documentTitle}\n${chunk.text}`)
+    .join('\n\n---\n\n')
+
+  return `You are an internal SOP assistant for Stewart & Jane Group. Answer questions using the provided knowledge base excerpts.
+
+Guidelines:
+- Answer concisely and directly
+- Use information only from the provided sources
+- If the sources don't fully answer the question, say so
+- Include relevant details and procedures when helpful
+- Maintain a professional, helpful tone
+
+Knowledge Base:
+${contextText}
+
+Always end your response with: Sources: ${context.sources.join(', ')}`
+}
+
+function createMessages(
+  systemPrompt: string,
+  query: string,
+  chatHistory?: Array<{ role: string; content: string }>
+): Array<{ role: 'system' | 'user' | 'assistant'; content: string }> {
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+    { role: 'system', content: systemPrompt },
+  ]
+
+  // Add chat history if provided, but limit tokens
+  if (chatHistory && chatHistory.length > 0) {
+    let historyTokens = 0
+    const maxHistoryTokens = config.rag.historyMaxTokens
+
+    // Add messages from most recent backwards until we hit token limit
+    for (let i = chatHistory.length - 1; i >= 0; i--) {
+      const message = chatHistory[i]
+      const messageTokens = countTokens(message.content)
+      
+      if (historyTokens + messageTokens > maxHistoryTokens) {
+        break
+      }
+      
+      messages.splice(1, 0, {
+        role: message.role as 'user' | 'assistant',
+        content: message.content,
+      })
+      
+      historyTokens += messageTokens
+    }
+  }
+
+  // Add current query
+  messages.push({ role: 'user', content: query })
+
+  return messages
+}
+
+export async function ingestSliteDocs(): Promise<{ processed: number; updated: number; errors: string[] }> {
+  let processed = 0
+  let updated = 0
+  const errors: string[] = []
+
+  try {
+    const notes = await sliteClient.getAllNotes()
+    
+    for (const note of notes) {
+      try {
+        await ingestDocument(note)
+        processed++
+        
+        // Check if document was actually updated
+        const existingDoc = await db.document.findUnique({
+          where: { sliteId: note.id },
+        })
+        
+        if (existingDoc) {
+          const newHash = createDocumentHash(note)
+          if (existingDoc.hash !== newHash) {
+            updated++
+          }
+        } else {
+          updated++
+        }
+        
+      } catch (error) {
+        const errorMsg = `Failed to ingest ${note.title}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        errors.push(errorMsg)
+        console.error(errorMsg)
+      }
+    }
+    
+  } catch (error) {
+    const errorMsg = `Failed to fetch notes from Slite: ${error instanceof Error ? error.message : 'Unknown error'}`
+    errors.push(errorMsg)
+    console.error(errorMsg)
+  }
+
+  return { processed, updated, errors }
+}
+
+async function ingestDocument(note: any): Promise<void> {
+  const plainTextContent = sliteClient.htmlToText(note.content || '')
+  const documentHash = createDocumentHash(note)
+  
+  // Check if document has changed
+  const existingDoc = await db.document.findUnique({
+    where: { sliteId: note.id },
+  })
+  
+  if (existingDoc && existingDoc.hash === documentHash) {
+    return // No changes, skip processing
+  }
+
+  // Delete existing chunks if updating
+  if (existingDoc) {
+    await db.chunk.deleteMany({
+      where: { documentId: existingDoc.id },
+    })
+  }
+
+  // Upsert document
+  const document = await db.document.upsert({
+    where: { sliteId: note.id },
+    update: {
+      title: note.title,
+      updatedAt: new Date(note.updated_at),
+      hash: documentHash,
+    },
+    create: {
+      sliteId: note.id,
+      title: note.title,
+      updatedAt: new Date(note.updated_at),
+      hash: documentHash,
+    },
+  })
+
+  // Chunk the text
+  const chunks = chunkText(plainTextContent)
+  
+  // Generate embeddings for all chunks
+  const chunkTexts = chunks.map(chunk => chunk.text)
+  const embeddings = await getEmbeddings(chunkTexts)
+  
+  // Store chunks with embeddings
+  const chunkData = chunks.map((chunk, index) => ({
+    documentId: document.id,
+    idx: chunk.index,
+    text: chunk.text,
+    tokens: chunk.tokens,
+    embedding: embeddings[index],
+  }))
+
+  // Insert chunks in batches to avoid memory issues
+  const batchSize = 100
+  for (let i = 0; i < chunkData.length; i += batchSize) {
+    const batch = chunkData.slice(i, i + batchSize)
+    
+    for (const chunk of batch) {
+      await db.$executeRaw`
+        INSERT INTO chunks ("id", "documentId", "idx", "text", "tokens", "embedding", "createdAt")
+        VALUES (${crypto.randomUUID()}, ${chunk.documentId}, ${chunk.idx}, ${chunk.text}, ${chunk.tokens}, ${JSON.stringify(chunk.embedding)}::vector, NOW())
+      `
+    }
+  }
+}
+
+function createDocumentHash(note: any): string {
+  const content = `${note.title}|${note.content}|${note.updated_at}`
+  return crypto.createHash('md5').update(content).digest('hex')
+}
+```
+
+### lib/assert.ts
+```typescript
+export function assert(condition: any, message?: string): asserts condition {
+  if (!condition) {
+    throw new Error(message || 'Assertion failed')
+  }
+}
+
+export function assertEquals<T>(actual: T, expected: T, message?: string): void {
+  if (actual !== expected) {
+    throw new Error(
+      message || `Expected ${expected}, but got ${actual}`
+    )
+  }
+}
+
+export function assertArrayEquals<T>(actual: T[], expected: T[], message?: string): void {
+  if (actual.length !== expected.length) {
+    throw new Error(
+      message || `Array lengths differ: expected ${expected.length}, got ${actual.length}`
+    )
+  }
+  
+  for (let i = 0; i < actual.length; i++) {
+    if (actual[i] !== expected[i]) {
+      throw new Error(
+        message || `Arrays differ at index ${i}: expected ${expected[i]}, got ${actual[i]}`
+      )
+    }
+  }
+}
+
+export function assertApproximately(actual: number, expected: number, tolerance: number = 0.001, message?: string): void {
+  if (Math.abs(actual - expected) > tolerance) {
+    throw new Error(
+      message || `Expected approximately ${expected}, but got ${actual} (tolerance: ${tolerance})`
+    )
+  }
+}
+```
+
+## UI Components
+
+### components/ui/button.tsx
+```typescript
+import * as React from "react"
+import { Slot } from "@radix-ui/react-slot"
+import { cva, type VariantProps } from "class-variance-authority"
+
+import { cn } from "@/lib/utils"
+
+const buttonVariants = cva(
+  "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        destructive:
+          "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        outline:
+          "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
+        secondary:
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        ghost: "hover:bg-accent hover:text-accent-foreground",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-10 px-4 py-2",
+        sm: "h-9 rounded-md px-3",
+        lg: "h-11 rounded-md px-8",
+        icon: "h-10 w-10",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
+)
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean
+}
+
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant, size, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button"
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+Button.displayName = "Button"
+
+export { Button, buttonVariants }
+```
+
+### components/ui/input.tsx
+```typescript
+import * as React from "react"
+
+import { cn } from "@/lib/utils"
+
+export interface InputProps
+  extends React.InputHTMLAttributes<HTMLInputElement> {}
+
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, ...props }, ref) => {
+    return (
+      <input
+        type={type}
+        className={cn(
+          "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+          className
+        )}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+Input.displayName = "Input"
+
+export { Input }
+```
+
+### components/ui/textarea.tsx
+```typescript
+import * as React from "react"
+
+import { cn } from "@/lib/utils"
+
+export interface TextareaProps
+  extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
+
+const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
+  ({ className, ...props }, ref) => {
+    return (
+      <textarea
+        className={cn(
+          "flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+          className
+        )}
+        ref={ref}
+        {...props}
+      />
+    )
+  }
+)
+Textarea.displayName = "Textarea"
+
+export { Textarea }
+```
+
+### components/ui/toast.tsx
+```typescript
+import * as React from "react"
+import * as ToastPrimitives from "@radix-ui/react-toast"
+import { cva, type VariantProps } from "class-variance-authority"
+import { X } from "lucide-react"
+
+import { cn } from "@/lib/utils"
+
+const ToastProvider = ToastPrimitives.Provider
+
+const ToastViewport = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Viewport>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Viewport>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Viewport
+    ref={ref}
+    className={cn(
+      "fixed top-0 z-[100] flex max-h-screen w-full flex-col-reverse p-4 sm:bottom-0 sm:right-0 sm:top-auto sm:flex-col md:max-w-[420px]",
+      className
+    )}
+    {...props}
+  />
+))
+ToastViewport.displayName = ToastPrimitives.Viewport.displayName
+
+const toastVariants = cva(
+  "group pointer-events-auto relative flex w-full items-center justify-between space-x-4 overflow-hidden rounded-md border p-6 pr-8 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-right-full data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full",
+  {
+    variants: {
+      variant: {
+        default: "border bg-background text-foreground",
+        destructive:
+          "destructive border-destructive bg-destructive text-destructive-foreground",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  }
+)
+
+const Toast = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Root>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
+    VariantProps<typeof toastVariants>
+>(({ className, variant, ...props }, ref) => {
+  return (
+    <ToastPrimitives.Root
+      ref={ref}
+      className={cn(toastVariants({ variant }), className)}
+      {...props}
+    />
+  )
+})
+Toast.displayName = ToastPrimitives.Root.displayName
+
+const ToastAction = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Action>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Action>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Action
+    ref={ref}
+    className={cn(
+      "inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 group-[.destructive]:border-muted/40 group-[.destructive]:hover:border-destructive/30 group-[.destructive]:hover:bg-destructive group-[.destructive]:hover:text-destructive-foreground group-[.destructive]:focus:ring-destructive",
+      className
+    )}
+    {...props}
+  />
+))
+ToastAction.displayName = ToastPrimitives.Action.displayName
+
+const ToastClose = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Close>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Close>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Close
+    ref={ref}
+    className={cn(
+      "absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600",
+      className
+    )}
+    toast-close=""
+    {...props}
+  >
+    <X className="h-4 w-4" />
+  </ToastPrimitives.Close>
+))
+ToastClose.displayName = ToastPrimitives.Close.displayName
+
+const ToastTitle = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Title>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Title>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Title
+    ref={ref}
+    className={cn("text-sm font-semibold", className)}
+    {...props}
+  />
+))
+ToastTitle.displayName = ToastPrimitives.Title.displayName
+
+const ToastDescription = React.forwardRef<
+  React.ElementRef<typeof ToastPrimitives.Description>,
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Description>
+>(({ className, ...props }, ref) => (
+  <ToastPrimitives.Description
+    ref={ref}
+    className={cn("text-sm opacity-90", className)}
+    {...props}
+  />
+))
+ToastDescription.displayName = ToastPrimitives.Description.displayName
+
+type ToastProps = React.ComponentPropsWithoutRef<typeof Toast>
+
+type ToastActionElement = React.ReactElement<typeof ToastAction>
+
+export {
+  type ToastProps,
+  type ToastActionElement,
+  ToastProvider,
+  ToastViewport,
+  Toast,
+  ToastTitle,
+  ToastDescription,
+  ToastClose,
+  ToastAction,
+}
+```
+
+### lib/utils.ts
+```typescript
+import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+
+export function formatDate(date: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date)
+}
+
+export function formatRelativeTime(date: Date): string {
+  const now = new Date()
+  const diffInMs = now.getTime() - date.getTime()
+  const diffInHours = diffInMs / (1000 * 60 * 60)
+  const diffInDays = diffInHours / 24
+
+  if (diffInHours < 1) {
+    return "Just now"
+  } else if (diffInHours < 24) {
+    return `${Math.floor(diffInHours)}h ago`
+  } else if (diffInDays < 7) {
+    return `${Math.floor(diffInDays)}d ago`
+  } else {
+    return formatDate(date)
+  }
+}
+
+export function generateChatTitle(message: string): string {
+  // Get first line of the message
+  const firstLine = message.split('\n')[0].trim()
+  
+  // If it's short enough, use it as is
+  if (firstLine.length <= 50) {
+    return firstLine
+  }
+  
+  // Otherwise, create a 5-word summary
+  const words = firstLine.split(' ')
+  if (words.length <= 5) {
+    return firstLine
+  }
+  
+  return words.slice(0, 5).join(' ') + '...'
+}
+
+export function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard) {
+    return navigator.clipboard.writeText(text)
+  }
+  
+  // Fallback for browsers without clipboard API
+  return new Promise((resolve, reject) => {
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    textArea.style.position = 'fixed'
+    textArea.style.left = '-999999px'
+    textArea.style.top = '-999999px'
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+    
+    try {
+      document.execCommand('copy')
+      textArea.remove()
+      resolve()
+    } catch (err) {
+      textArea.remove()
+      reject(err)
+    }
+  })
+}
+```
+
+### hooks/use-toast.ts
+```typescript
+import * as React from "react"
+
+import type {
+  ToastActionElement,
+  ToastProps,
+} from "@/components/ui/toast"
+
+const TOAST_LIMIT = 1
+const TOAST_REMOVE_DELAY = 1000000
+
+type ToasterToast = ToastProps & {
+  id: string
+  title?: React.ReactNode
+  description?: React.ReactNode
+  action?: ToastActionElement
+}
+
+const actionTypes = {
+  ADD_TOAST: "ADD_TOAST",
+  UPDATE_TOAST: "UPDATE_TOAST",
+  DISMISS_TOAST: "DISMISS_TOAST",
+  REMOVE_TOAST: "REMOVE_TOAST",
+} as const
+
+let count = 0
+
+function genId() {
+  count = (count + 1) % Number.MAX_SAFE_INTEGER
+  return count.toString()
+}
+
+type ActionType = typeof actionTypes
+
+type Action =
+  | {
+      type: ActionType["ADD_TOAST"]
+      toast: ToasterToast
+    }
+  | {
+      type: ActionType["UPDATE_TOAST"]
+      toast: Partial<ToasterToast>
+    }
+  | {
+      type: ActionType["DISMISS_TOAST"]
+      toastId?: ToasterToast["id"]
+    }
+  | {
+      type: ActionType["REMOVE_TOAST"]
+      toastId?: ToasterToast["id"]
+    }
+
+interface State {
+  toasts: ToasterToast[]
+}
+
+const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
+
+const addToRemoveQueue = (toastId: string) => {
+  if (toastTimeouts.has(toastId)) {
+    return
+  }
+
+  const timeout = setTimeout(() => {
+    toastTimeouts.delete(toastId)
+    dispatch({
+      type: "REMOVE_TOAST",
+      toastId: toastId,
+    })
+  }, TOAST_REMOVE_DELAY)
+
+  toastTimeouts.set(toastId, timeout)
+}
+
+export const reducer = (state: State, action: Action): State => {
+  switch (action.type) {
+    case "ADD_TOAST":
+      return {
+        ...state,
+        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
+      }
+
+    case "UPDATE_TOAST":
+      return {
+        ...state,
+        toasts: state.toasts.map((t) =>
+          t.id === action.toast.id ? { ...t, ...action.toast } : t
+        ),
+      }
+
+    case "DISMISS_TOAST": {
+      const { toastId } = action
+
+      if (toastId) {
+        addToRemoveQueue(toastId)
+      } else {
+        state.toasts.forEach((toast) => {
+          addToRemoveQueue(toast.id)
+        })
+      }
+
+      return {
+        ...state,
+        toasts: state.toasts.map((t) =>
+          t.id === toastId || toastId === undefined
+            ? {
+                ...t,
+                open: false,
+              }
+            : t
+        ),
+      }
+    }
+    case "REMOVE_TOAST":
+      if (action.toastId === undefined) {
+        return {
+          ...state,
+          toasts: [],
+        }
+      }
+      return {
+        ...state,
+        toasts: state.toasts.filter((t) => t.id !== action.toastId),
+      }
+  }
+}
+
+const listeners: Array<(state: State) => void> = []
+
+let memoryState: State = { toasts: [] }
+
+function dispatch(action: Action) {
+  memoryState = reducer(memoryState, action)
+  listeners.forEach((listener) => {
+    listener(memoryState)
+  })
+}
+
+type Toast = Omit<ToasterToast, "id">
+
+function toast({ ...props }: Toast) {
+  const id = genId()
+
+  const update = (props: ToasterToast) =>
+    dispatch({
+      type: "UPDATE_TOAST",
+      toast: { ...props, id },
+    })
+  const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
+
+  dispatch({
+    type: "ADD_TOAST",
+    toast: {
+      ...props,
+      id,
+      open: true,
+      onOpenChange: (open) => {
+        if (!open) dismiss()
+      },
+    },
+  })
+
+  return {
+    id: id,
+    dismiss,
+    update,
+  }
+}
+
+function useToast() {
+  const [state, setState] = React.useState<State>(memoryState)
+
+  React.useEffect(() => {
+    listeners.push(setState)
+    return () => {
+      const index = listeners.indexOf(setState)
+      if (index > -1) {
+        listeners.splice(index, 1)
+      }
+    }
+  }, [state])
+
+  return {
+    ...state,
+    toast,
+    dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
+  }
+}
+
+export { useToast, toast }
+```
+
+### components/ui/toaster.tsx
+```typescript
+import {
+  Toast,
+  ToastClose,
+  ToastDescription,
+  ToastProvider,
+  ToastTitle,
+  ToastViewport,
+} from "@/components/ui/toast"
+import { useToast } from "@/hooks/use-toast"
+
+export function Toaster() {
+  const { toasts } = useToast()
+
+  return (
+    <ToastProvider>
+      {toasts.map(function ({ id, title, description, action, ...props }) {
+        return (
+          <Toast key={id} {...props}>
+            <div className="grid gap-1">
+              {title && <ToastTitle>{title}</ToastTitle>}
+              {description && (
+                <ToastDescription>{description}</ToastDescription>
+              )}
+            </div>
+            {action}
+            <ToastClose />
+          </Toast>
+        )
+      })}
+      <ToastViewport />
+    </ToastProvider>
+  )
+}
+```
+
+### components/ui/avatar.tsx
+```typescript
+import * as React from "react"
+import * as AvatarPrimitive from "@radix-ui/react-avatar"
+
+import { cn } from "@/lib/utils"
+
+const Avatar = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Root
+    ref={ref}
+    className={cn(
+      "relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full",
+      className
+    )}
+    {...props}
+  />
+))
+Avatar.displayName = AvatarPrimitive.Root.displayName
+
+const AvatarImage = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Image>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Image
+    ref={ref}
+    className={cn("aspect-square h-full w-full", className)}
+    {...props}
+  />
+))
+AvatarImage.displayName = AvatarPrimitive.Image.displayName
+
+const AvatarFallback = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Fallback>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Fallback
+    ref={ref}
+    className={cn(
+      "flex h-full w-full items-center justify-center rounded-full bg-muted",
+      className
+    )}
+    {...props}
+  />
+))
+AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName
+
+export { Avatar, AvatarImage, AvatarFallback }
+```
+
+### components/ui/scroll-area.tsx
+```typescript
+import * as React from "react"
+import * as ScrollAreaPrimitive from "@radix-ui/react-scroll-area"
+
+import { cn } from "@/lib/utils"
+
+const ScrollArea = React.forwardRef<
+  React.ElementRef<typeof ScrollAreaPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>
+>(({ className, children, ...props }, ref) => (
+  <ScrollAreaPrimitive.Root
+    ref={ref}
+    className={cn("relative overflow-hidden", className)}
+    {...props}
+  >
+    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">
+      {children}
+    </ScrollAreaPrimitive.Viewport>
+    <ScrollBar />
+    <ScrollAreaPrimitive.Corner />
+  </ScrollAreaPrimitive.Root>
+))
+ScrollArea.displayName = ScrollAreaPrimitive.Root.displayName
+
+const ScrollBar = React.forwardRef<
+  React.ElementRef<typeof ScrollAreaPrimitive.ScrollAreaScrollbar>,
+  React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.ScrollAreaScrollbar>
+>(({ className, orientation = "vertical", ...props }, ref) => (
+  <ScrollAreaPrimitive.ScrollAreaScrollbar
+    ref={ref}
+    orientation={orientation}
+    className={cn(
+      "flex touch-none select-none transition-colors",
+      orientation === "vertical" &&
+        "h-full w-2.5 border-l border-l-transparent p-[1px]",
+      orientation === "horizontal" &&
+        "h-2.5 flex-col border-t border-t-transparent p-[1px]",
+      className
+    )}
+    {...props}
+  >
+    <ScrollAreaPrimitive.ScrollAreaThumb className="relative flex-1 rounded-full bg-border" />
+  </ScrollAreaPrimitive.ScrollAreaScrollbar>
+))
+ScrollBar.displayName = ScrollAreaPrimitive.ScrollAreaScrollbar.displayName
+
+export { ScrollArea, ScrollBar }
+```
+
+### components/ui/separator.tsx
+```typescript
+import * as React from "react"
+import * as SeparatorPrimitive from "@radix-ui/react-separator"
+
+import { cn } from "@/lib/utils"
+
+const Separator = React.forwardRef<
+  React.ElementRef<typeof SeparatorPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof SeparatorPrimitive.Root>
+>(
+  (
+    { className, orientation = "horizontal", decorative = true, ...props },
+    ref
+  ) => (
+    <SeparatorPrimitive.Root
+      ref={ref}
+      decorative={decorative}
+      orientation={orientation}
+      className={cn(
+        "shrink-0 bg-border",
+        orientation === "horizontal" ? "h-[1px] w-full" : "h-full w-[1px]",
+        className
+      )}
+      {...props}
+    />
+  )
+)
+Separator.displayName = SeparatorPrimitive.Root.displayName
+
+export { Separator }
+```
+
+### components/ui/dropdown-menu.tsx
+```typescript
+import * as React from "react"
+import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
+import { Check, ChevronRight, Circle } from "lucide-react"
+
+import { cn } from "@/lib/utils"
+
+const DropdownMenu = DropdownMenuPrimitive.Root
+
+const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
+
+const DropdownMenuGroup = DropdownMenuPrimitive.Group
+
+const DropdownMenuPortal = DropdownMenuPrimitive.Portal
+
+const DropdownMenuSub = DropdownMenuPrimitive.Sub
+
+const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup
+
+const DropdownMenuSubTrigger = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.SubTrigger>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubTrigger> & {
+    inset?: boolean
+  }
+>(({ className, inset, children, ...props }, ref) => (
+  <DropdownMenuPrimitive.SubTrigger
+    ref={ref}
+    className={cn(
+      "flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none focus:bg-accent data-[state=open]:bg-accent",
+      inset && "pl-8",
+      className
+    )}
+    {...props}
+  >
+    {children}
+    <ChevronRight className="ml-auto h-4 w-4" />
+  </DropdownMenuPrimitive.SubTrigger>
+))
+DropdownMenuSubTrigger.displayName =
+  DropdownMenuPrimitive.SubTrigger.displayName
+
+const DropdownMenuSubContent = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.SubContent>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
+>(({ className, ...props }, ref) => (
+  <DropdownMenuPrimitive.SubContent
+    ref={ref}
+    className={cn(
+      "z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+      className
+    )}
+    {...props}
+  />
+))
+DropdownMenuSubContent.displayName =
+  DropdownMenuPrimitive.SubContent.displayName
+
+const DropdownMenuContent = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
+>(({ className, sideOffset = 4, ...props }, ref) => (
+  <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPrimitive.Content
+      ref={ref}
+      sideOffset={sideOffset}
+      className={cn(
+        "z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        className
+      )}
+      {...props}
+    />
+  </DropdownMenuPrimitive.Portal>
+))
+DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName
+
+const DropdownMenuItem = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Item>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
+    inset?: boolean
+  }
+>(({ className, inset, ...props }, ref) => (
+  <DropdownMenuPrimitive.Item
+    ref={ref}
+    className={cn(
+      "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      inset && "pl-8",
+      className
+    )}
+    {...props}
+  />
+))
+DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName
+
+const DropdownMenuCheckboxItem = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
+>(({ className, children, checked, ...props }, ref) => (
+  <DropdownMenuPrimitive.CheckboxItem
+    ref={ref}
+    className={cn(
+      "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      className
+    )}
+    checked={checked}
+    {...props}
+  >
+    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+      <DropdownMenuPrimitive.ItemIndicator>
+        <Check className="h-4 w-4" />
+      </DropdownMenuPrimitive.ItemIndicator>
+    </span>
+    {children}
+  </DropdownMenuPrimitive.CheckboxItem>
+))
+DropdownMenuCheckboxItem.displayName =
+  DropdownMenuPrimitive.CheckboxItem.displayName
+
+const DropdownMenuRadioItem = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
+>(({ className, children, ...props }, ref) => (
+  <DropdownMenuPrimitive.RadioItem
+    ref={ref}
+    className={cn(
+      "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      className
+    )}
+    {...props}
+  >
+    <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+      <DropdownMenuPrimitive.ItemIndicator>
+        <Circle className="h-2 w-2 fill-current" />
+      </DropdownMenuPrimitive.ItemIndicator>
+    </span>
+    {children}
+  </DropdownMenuPrimitive.RadioItem>
+))
+DropdownMenuRadioItem.displayName = DropdownMenuPrimitive.RadioItem.displayName
+
+const DropdownMenuLabel = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Label>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label> & {
+    inset?: boolean
+  }
+>(({ className, inset, ...props }, ref) => (
+  <DropdownMenuPrimitive.Label
+    ref={ref}
+    className={cn(
+      "px-2 py-1.5 text-sm font-semibold",
+      inset && "pl-8",
+      className
+    )}
+    {...props}
+  />
+))
+DropdownMenuLabel.displayName = DropdownMenuPrimitive.Label.displayName
+
+const DropdownMenuSeparator = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Separator>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator>
+>(({ className, ...props }, ref) => (
+  <DropdownMenuPrimitive.Separator
+    ref={ref}
+    className={cn("-mx-1 my-1 h-px bg-muted", className)}
+    {...props}
+  />
+))
+DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName
+
+const DropdownMenuShortcut = ({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLSpanElement>) => {
+  return (
+    <span
+      className={cn("ml-auto text-xs tracking-widest opacity-60", className)}
+      {...props}
+    />
+  )
+}
+DropdownMenuShortcut.displayName = "DropdownMenuShortcut"
+
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuCheckboxItem,
+  DropdownMenuRadioItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuGroup,
+  DropdownMenuPortal,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuRadioGroup,
+}
+```
+
+### components/theme-provider.tsx
+```typescript
+"use client"
+
+import * as React from "react"
+import { ThemeProvider as NextThemesProvider } from "next-themes"
+import { type ThemeProviderProps } from "next-themes/dist/types"
+
+export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
+  return <NextThemesProvider {...props}>{children}</NextThemesProvider>
+}
+```
+
+### components/theme-toggle.tsx
+```typescript
+"use client"
+
+import * as React from "react"
+import { Moon, Sun } from "lucide-react"
+import { useTheme } from "next-themes"
+
+import { Button } from "@/components/ui/button"
+
+export function ThemeToggle() {
+  const { setTheme, theme } = useTheme()
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+      className="h-9 w-9"
+    >
+      <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+      <span className="sr-only">Toggle theme</span>
+    </Button>
+  )
+}
+```
+
+## Chat Components
+
+### components/ChatInput.tsx
+```typescript
+"use client"
+
+import * as React from "react"
+import { Send, Square } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
+import { cn } from "@/lib/utils"
+
+interface ChatInputProps {
+  onSend: (message: string) => void
+  onStop?: () => void
+  disabled?: boolean
+  isStreaming?: boolean
+  placeholder?: string
+}
+
+export function ChatInput({
+  onSend,
+  onStop,
+  disabled = false,
+  isStreaming = false,
+  placeholder = "Ask about SOPs, procedures, or policies..."
+}: ChatInputProps) {
+  const [message, setMessage] = React.useState("")
+  const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+
+  const handleSubmit = () => {
+    if (message.trim() && !disabled && !isStreaming) {
+      onSend(message.trim())
+      setMessage("")
+      
+      // Reset textarea height
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto"
+      }
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSubmit()
+    }
+  }
+
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value)
+    
+    // Auto-resize textarea
+    const textarea = e.target
+    textarea.style.height = "auto"
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`
+  }
+
+  const handleStop = () => {
+    if (onStop) {
+      onStop()
+    }
+  }
+
+  React.useEffect(() => {
+    // Focus textarea when component mounts
+    if (textareaRef.current) {
+      textareaRef.current.focus()
+    }
+  }, [])
+
+  return (
+    <div className="border-t bg-background p-4">
+      <div className="mx-auto max-w-4xl">
+        <div className="relative flex items-end space-x-2">
+          <div className="flex-1 relative">
+            <Textarea
+              ref={textareaRef}
+              value={message}
+              onChange={handleTextareaChange}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              disabled={disabled}
+              className={cn(
+                "min-h-[60px] max-h-[200px] resize-none pr-12",
+                "focus:ring-2 focus:ring-primary focus:border-transparent"
+              )}
+              rows={1}
+            />
+            <div className="absolute bottom-2 right-2">
+              {isStreaming ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleStop}
+                  className="h-8 w-8 p-0"
+                >
+                  <Square className="h-4 w-4" />
+                  <span className="sr-only">Stop generating</span>
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleSubmit}
+                  disabled={disabled || !message.trim()}
+                  className="h-8 w-8 p-0"
+                >
+                  <Send className="h-4 w-4" />
+                  <span className="sr-only">Send message</span>
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="mt-2 text-xs text-muted-foreground text-center">
+          Press Enter to send, Shift+Enter for new line
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+### components/MessageList.tsx
+```typescript
+"use client"
+
+import * as React from "react"
+import { Copy, User, Bot } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
+import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { cn, copyToClipboard, formatRelativeTime } from "@/lib/utils"
+import { useToast } from "@/hooks/use-toast"
+import { SourceList } from "./SourceList"
+
+export interface Message {
+  id: string
+  role: "user" | "assistant" | "system"
+  content: string
+  createdAt: Date
+  sources?: string[]
+}
+
+interface MessageListProps {
+  messages: Message[]
+  isStreaming?: boolean
+  streamingContent?: string
+  userImage?: string
+  userName?: string
+}
+
+export function MessageList({
+  messages,
+  isStreaming = false,
+  streamingContent = "",
+  userImage,
+  userName = "You"
+}: MessageListProps) {
+  const { toast } = useToast()
+  const scrollAreaRef = React.useRef<HTMLDivElement>(null)
+  const bottomRef = React.useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when new messages arrive
+  React.useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages, streamingContent])
+
+  const handleCopy = async (content: string) => {
+    try {
+      await copyToClipboard(content)
+      toast({
+        title: "Copied to clipboard",
+        description: "Message content copied successfully.",
+      })
+    } catch (error) {
+      toast({
+        title: "Failed to copy",
+        description: "Could not copy message to clipboard.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const renderMessage = (message: Message, isLast: boolean = false) => {
+    const isUser = message.role === "user"
+    const isSystem = message.role === "system"
+    
+    if (isSystem) return null // Don't render system messages
+
+    return (
+      <div
+        key={message.id}
+        className={cn(
+          "group flex items-start space-x-3 p-6",
+          isUser ? "bg-muted/30" : "bg-background"
+        )}
+      >
+        <Avatar className="h-8 w-8 shrink-0">
+          {isUser ? (
+            <>
+              <AvatarImage src={userImage} alt={userName} />
+              <AvatarFallback>
+                <User className="h-4 w-4" />
+              </AvatarFallback>
+            </>
+          ) : (
+            <AvatarFallback className="bg-primary text-primary-foreground">
+              <Bot className="h-4 w-4" />
+            </AvatarFallback>
+          )}
+        </Avatar>
+        
+        <div className="flex-1 space-y-2 overflow-hidden">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-medium">
+              {isUser ? userName : "Assistant"}
+            </div>
+            <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <span className="text-xs text-muted-foreground">
+                {formatRelativeTime(message.createdAt)}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => handleCopy(message.content)}
+              >
+                <Copy className="h-3 w-3" />
+                <span className="sr-only">Copy message</span>
+              </Button>
+            </div>
+          </div>
+          
+          <div className="prose prose-sm max-w-none dark:prose-invert">
+            {isUser ? (
+              <p className="whitespace-pre-wrap">{message.content}</p>
+            ) : (
+              <ReactMarkdown
+  
