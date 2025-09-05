@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
-import { db } from "@/lib/db"
-import { checkRateLimit } from "@/lib/rateLimit"
-import { retrieveContext, generateResponseAndSave } from "@/lib/rag"
-import { countTokens } from "@/lib/chunker"
 
 export const runtime = "nodejs"
 
@@ -14,6 +10,12 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    // Dynamic imports to avoid build-time issues
+    const { db } = await import("@/lib/db")
+    const { checkRateLimit } = await import("@/lib/rateLimit")
+    const { retrieveContext, generateResponseAndSave } = await import("@/lib/rag")
+    const { countTokens } = await import("@/lib/chunker")
 
     // Check rate limit
     const rateLimit = await checkRateLimit(session.user.id)
@@ -58,7 +60,7 @@ export async function POST(request: NextRequest) {
 
     const chatHistory = recentMessages
       .reverse()
-      .map(msg => ({
+      .map((msg: any) => ({
         role: msg.role,
         content: msg.content,
       }))
@@ -76,7 +78,7 @@ export async function POST(request: NextRequest) {
     // Retrieve context using RAG
     const context = await retrieveContext(
       message,
-      chatHistory.slice(-5).map(msg => msg.content) // Last 5 messages for search context
+      chatHistory.slice(-5).map((msg: any) => msg.content) // Last 5 messages for search context
     )
 
     // Generate streaming response with database saving
