@@ -1,17 +1,12 @@
 import config from './config'
 
-export interface SliteNote {
-  id: string
-  title: string
-  content: string
-  updated_at: string
-  channel?: string
-  tags?: string[]
-}
-
-export interface SliteSearchResponse {
-  notes: SliteNote[]
-  total: number
+export interface SliteAskResponse {
+  answer: string
+  sources?: Array<{
+    title: string
+    url?: string
+    snippet?: string
+  }>
 }
 
 class SliteClient {
@@ -19,80 +14,44 @@ class SliteClient {
   private apiKey = config.slite.apiKey
 
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
+    if (!this.apiKey) {
+      throw new Error('Slite API key is not configured')
+    }
+
     const url = `${this.baseUrl}${endpoint}`
+    
+    console.log(`Making Slite API request to: ${url}`)
+    console.log(`Using API key: ${this.apiKey.substring(0, 20)}...`)
     
     const response = await fetch(url, {
       ...options,
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
+        'x-slite-api-key': this.apiKey,
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
         ...options?.headers,
       },
     })
 
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`Slite API error: ${response.status} ${response.statusText}`, errorText)
       throw new Error(`Slite API error: ${response.status} ${response.statusText}`)
     }
 
     return response.json()
   }
 
-  async searchNotes(query: string = '', limit: number = 100): Promise<SliteNote[]> {
-    const params = new URLSearchParams({
-      q: query,
-      limit: limit.toString(),
-    })
+  async ask(question: string): Promise<SliteAskResponse> {
+    console.log('Asking Slite:', question)
+
+    const url = `/ask?question=${encodeURIComponent(question)}`
+    const response = await this.request<SliteAskResponse>(url)
     
-    if (config.slite.channelFilter) {
-      params.append('channel', config.slite.channelFilter)
-    }
-
-    const response = await this.request<SliteSearchResponse>(
-      `/search-notes?${params.toString()}`
-    )
-
-    return response.notes
+    console.log('Slite response:', response)
+    return response
   }
 
-  async getNote(id: string): Promise<SliteNote> {
-    return this.request<SliteNote>(`/notes/${id}`)
-  }
-
-  async getAllNotes(): Promise<SliteNote[]> {
-    let allNotes: SliteNote[] = []
-    let page = 1
-    const limit = 100
-
-    while (true) {
-      const notes = await this.searchNotes('', limit)
-      if (notes.length === 0) break
-      
-      allNotes = allNotes.concat(notes)
-      if (notes.length < limit) break
-      
-      page++
-      // Add delay to respect rate limits
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
-
-    return allNotes
-  }
-
-  // Convert HTML content to plain text
-  htmlToText(html: string): string {
-    return html
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<[^>]*>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/\s+/g, ' ')
-      .trim()
-  }
 }
 
 export const sliteClient = new SliteClient()

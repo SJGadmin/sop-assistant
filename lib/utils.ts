@@ -14,9 +14,10 @@ export function formatDate(date: Date): string {
   }).format(date)
 }
 
-export function formatRelativeTime(date: Date): string {
+export function formatRelativeTime(date: Date | string): string {
   const now = new Date()
-  const diffInMs = now.getTime() - date.getTime()
+  const dateObj = typeof date === 'string' ? new Date(date) : date
+  const diffInMs = now.getTime() - dateObj.getTime()
   const diffInHours = diffInMs / (1000 * 60 * 60)
   const diffInDays = diffInHours / 24
 

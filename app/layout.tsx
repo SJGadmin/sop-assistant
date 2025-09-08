@@ -9,6 +9,9 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'SOP Assistant - Stewart & Jane Group',
   description: 'Internal Standard Operating Procedures Assistant',
+  icons: {
+    icon: 'https://assets.agentfire3.com/uploads/sites/1849/2024/10/favicon.png',
+  },
 }
 
 export default function RootLayout({

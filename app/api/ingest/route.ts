@@ -13,21 +13,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("Starting document ingestion...")
+    console.log("Ingestion endpoint called - no longer needed with Slite's ask API")
     
-    // Dynamic import to avoid build-time issues
-    const { ingestSliteDocs } = await import("@/lib/rag")
-    const result = await ingestSliteDocs()
-    
-    console.log(`Ingestion completed: ${result.processed} processed, ${result.updated} updated`)
-    
-    if (result.errors.length > 0) {
-      console.error("Ingestion errors:", result.errors)
-    }
-
     return NextResponse.json({
-      message: `Processed ${result.processed} documents, updated ${result.updated}`,
-      ...result,
+      message: "No document ingestion needed - using Slite's ask API directly",
+      processed: 0,
+      updated: 0,
+      errors: [],
     })
   } catch (error) {
     console.error("Ingestion API error:", error)

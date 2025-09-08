@@ -207,6 +207,7 @@ export default function HomePage() {
       }
 
       let assistantContent = ""
+      let messageCreated = false
       
       try {
         while (true) {
@@ -218,18 +219,24 @@ export default function HomePage() {
           
           for (const line of lines) {
             if (line.startsWith('data: ')) {
-              const data = line.slice(6)
+              const data = line.slice(6).trim()
               if (data === '[DONE]') {
                 break
               }
               
+              if (data.length === 0) continue // Skip empty data
+              
               try {
                 const parsed = JSON.parse(data)
-                if (parsed.content) {
+                
+                // Handle content chunks
+                if (parsed.content && typeof parsed.content === 'string') {
                   assistantContent += parsed.content
                   setStreamingContent(assistantContent)
-                } else if (parsed.sources) {
-                  // Handle final message with sources
+                }
+                
+                // Handle final message with sources
+                if (parsed.sources && !messageCreated) {
                   const finalMessage: Message = {
                     id: `msg-${Date.now()}`,
                     role: "assistant",
@@ -240,9 +247,10 @@ export default function HomePage() {
                   
                   setMessages(prev => [...prev, finalMessage])
                   setStreamingContent("")
+                  messageCreated = true
                   
-                  // Update chat title if this is the first message
-                  if (messages.length === 1) { // User message + this assistant message
+                  // Update chat title if this is the first assistant message
+                  if (messages.length === 1) {
                     setChats(prev => prev.map(chat => 
                       chat.id === chatId 
                         ? { ...chat, title: generateChatTitle(content), updatedAt: new Date() }
@@ -251,13 +259,35 @@ export default function HomePage() {
                   }
                 }
               } catch (parseError) {
-                // Ignore parse errors for partial chunks
+                console.warn('Failed to parse SSE data:', data, parseError)
               }
             }
           }
         }
       } finally {
         reader.releaseLock()
+      }
+      
+      // Create final message if we have content but haven't created one yet
+      if (assistantContent.length > 0 && !messageCreated) {
+        const finalMessage: Message = {
+          id: `msg-${Date.now()}`,
+          role: "assistant",
+          content: assistantContent,
+          createdAt: new Date(),
+        }
+        
+        setMessages(prev => [...prev, finalMessage])
+        setStreamingContent("")
+        
+        // Update chat title if this is the first assistant message
+        if (messages.length === 1) {
+          setChats(prev => prev.map(chat => 
+            chat.id === chatId 
+              ? { ...chat, title: generateChatTitle(content), updatedAt: new Date() }
+              : chat
+          ))
+        }
       }
       
     } catch (error) {
@@ -304,35 +334,63 @@ export default function HomePage() {
       
       <div className="flex flex-1 flex-col">
         {currentChatId ? (
-          <>
-            <MessageList
-              messages={messages}
-              isStreaming={isStreaming}
-              streamingContent={streamingContent}
-            />
-            <ChatInput
-              onSend={handleSendMessage}
-              onStop={handleStopStreaming}
-              isStreaming={isStreaming}
-            />
-          </>
+          <MessageList
+            messages={messages}
+            isStreaming={isStreaming}
+            streamingContent={streamingContent}
+          />
         ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center space-y-4">
-              <div className="h-12 w-12 rounded-lg bg-primary mx-auto flex items-center justify-center">
-                <div className="h-6 w-6 rounded bg-primary-foreground" />
+          <div className="flex flex-1 items-center justify-center bg-gray-50">
+            <div className="text-center max-w-2xl px-8">
+              <div className="mb-8">
+                <div className="w-16 h-16 mx-auto mb-6 rounded-2xl overflow-hidden">
+                  <img 
+                    src="https://assets.agentfire3.com/uploads/sites/1849/2024/10/favicon.png" 
+                    alt="Stewart & Jane Group"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <h1 className="text-3xl font-bold text-gray-900 mb-4">Welcome to SOP Assistant</h1>
+                <p className="text-gray-600 text-lg">
+                  Your AI-powered guide to Stewart & Jane Group's standard operating procedures, 
+                  policies, and documentation.
+                </p>
               </div>
-              <h1 className="text-2xl font-semibold">Welcome to SOP Assistant</h1>
-              <p className="text-muted-foreground max-w-md">
-                Ask questions about Stewart & Jane Group's standard operating procedures, 
-                policies, and documentation.
-              </p>
-              <div className="text-sm text-muted-foreground">
-                Press <kbd className="px-2 py-1 bg-muted rounded text-xs">⌘K</kbd> to start a new chat
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <div className="p-6 border border-gray-200 rounded-xl bg-white shadow-sm">
+                  <h3 className="font-semibold mb-2 text-gray-900">📋 SOPs & Procedures</h3>
+                  <p className="text-sm text-gray-600">Get instant answers about company procedures and workflows</p>
+                </div>
+                <div className="p-6 border border-gray-200 rounded-xl bg-white shadow-sm">
+                  <h3 className="font-semibold mb-2 text-gray-900">📚 Policy Questions</h3>
+                  <p className="text-sm text-gray-600">Find information about company policies and guidelines</p>
+                </div>
+                <div className="p-6 border border-gray-200 rounded-xl bg-white shadow-sm">
+                  <h3 className="font-semibold mb-2 text-gray-900">🔍 Quick Search</h3>
+                  <p className="text-sm text-gray-600">Search through all documentation with natural language</p>
+                </div>
+                <div className="p-6 border border-gray-200 rounded-xl bg-white shadow-sm">
+                  <h3 className="font-semibold mb-2 text-gray-900">💡 Best Practices</h3>
+                  <p className="text-sm text-gray-600">Learn recommended approaches and best practices</p>
+                </div>
+              </div>
+              
+              <div className="text-center">
+                <p className="text-sm text-gray-500">
+                  Start typing below or press <kbd className="px-2 py-1 bg-gray-200 rounded text-xs font-mono">⌘K</kbd> to begin
+                </p>
               </div>
             </div>
           </div>
         )}
+        
+        {/* Always show chat input */}
+        <ChatInput
+          onSend={handleSendMessage}
+          onStop={handleStopStreaming}
+          isStreaming={isStreaming}
+        />
       </div>
     </div>
   )

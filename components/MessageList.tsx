@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Copy, User, Bot } from "lucide-react"
+import { Copy, User } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn, copyToClipboard, formatRelativeTime } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { SourceList } from "./SourceList"
+import { LoadingDots } from "./LoadingDots"
 
 export interface Message {
   id: string
@@ -75,8 +76,12 @@ export function MessageList({
               <User className="h-4 w-4" />
             </AvatarFallback>
           ) : (
-            <AvatarFallback className="bg-primary text-primary-foreground">
-              <Bot className="h-4 w-4" />
+            <AvatarFallback className="p-1">
+              <img 
+                src="https://assets.agentfire3.com/uploads/sites/1849/2024/10/favicon.png" 
+                alt="SOP Assistant"
+                className="w-full h-full object-contain"
+              />
             </AvatarFallback>
           )}
         </Avatar>
@@ -155,21 +160,31 @@ export function MessageList({
           .filter(m => m.role !== "system")
           .map((message) => renderMessage(message))}
         
-        {isStreaming && streamingContent && (
+        {isStreaming && (
           <div className="group flex items-start space-x-3 p-6 bg-background">
             <Avatar className="h-8 w-8 shrink-0">
-              <AvatarFallback className="bg-primary text-primary-foreground">
-                <Bot className="h-4 w-4" />
+              <AvatarFallback className="p-1">
+                <img 
+                  src="https://assets.agentfire3.com/uploads/sites/1849/2024/10/favicon.png" 
+                  alt="SOP Assistant"
+                  className="w-full h-full object-contain"
+                />
               </AvatarFallback>
             </Avatar>
             
             <div className="flex-1 space-y-2 overflow-hidden">
               <div className="text-sm font-medium">Assistant</div>
               <div className="prose prose-sm max-w-none dark:prose-invert">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {streamingContent}
-                </ReactMarkdown>
-                <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1" />
+                {streamingContent ? (
+                  <>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {streamingContent}
+                    </ReactMarkdown>
+                    <span className="inline-block w-2 h-4 bg-primary animate-pulse ml-1" />
+                  </>
+                ) : (
+                  <LoadingDots text="Searching documentation" />
+                )}
               </div>
             </div>
           </div>
