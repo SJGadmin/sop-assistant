@@ -172,7 +172,7 @@ export function MessageList({
 
   return (
     <div ref={scrollAreaRef} className="flex-1 bg-white h-full overflow-y-auto overflow-x-hidden">
-      <div className="space-y-4 bg-white min-h-full p-4">
+      <div className="space-y-4 bg-white p-4">
         {messages
           .filter(m => m.role !== "system")
           .map((message) => renderMessage(message))}
