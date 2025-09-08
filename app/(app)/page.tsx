@@ -50,7 +50,13 @@ export default function HomePage() {
       const response = await fetch('/api/chats')
       if (response.ok) {
         const data = await response.json()
-        setChats(data.chats || [])
+        // Convert string dates to Date objects
+        const chatsWithDates = (data.chats || []).map((chat: any) => ({
+          ...chat,
+          createdAt: new Date(chat.createdAt),
+          updatedAt: new Date(chat.updatedAt),
+        }))
+        setChats(chatsWithDates)
       }
     } catch (error) {
       toast({
@@ -67,7 +73,12 @@ export default function HomePage() {
       const response = await fetch(`/api/chats/${chatId}`)
       if (response.ok) {
         const data = await response.json()
-        setMessages(data.messages || [])
+        // Convert string dates to Date objects
+        const messagesWithDates = (data.messages || []).map((message: any) => ({
+          ...message,
+          createdAt: new Date(message.createdAt),
+        }))
+        setMessages(messagesWithDates)
       }
     } catch (error) {
       toast({

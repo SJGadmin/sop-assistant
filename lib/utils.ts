@@ -5,18 +5,49 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatDate(date: Date): string {
+export function formatDate(date: Date | string): string {
+  let dateObj: Date
+  
+  try {
+    dateObj = typeof date === 'string' ? new Date(date) : date
+    
+    // Check if the date is valid
+    if (isNaN(dateObj.getTime())) {
+      return "Invalid date"
+    }
+  } catch (error) {
+    console.warn('Failed to format date:', date, error)
+    return "Invalid date"
+  }
+  
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(date)
+  }).format(dateObj)
 }
 
-export function formatRelativeTime(date: Date | string): string {
+export function formatRelativeTime(date: Date | string | null | undefined): string {
+  if (!date) {
+    return "Unknown"
+  }
+
   const now = new Date()
-  const dateObj = typeof date === 'string' ? new Date(date) : date
+  let dateObj: Date
+  
+  try {
+    dateObj = typeof date === 'string' ? new Date(date) : date
+    
+    // Check if the date is valid
+    if (isNaN(dateObj.getTime())) {
+      return "Invalid date"
+    }
+  } catch (error) {
+    console.warn('Failed to parse date:', date, error)
+    return "Invalid date"
+  }
+  
   const diffInMs = now.getTime() - dateObj.getTime()
   const diffInHours = diffInMs / (1000 * 60 * 60)
   const diffInDays = diffInHours / 24
@@ -28,7 +59,7 @@ export function formatRelativeTime(date: Date | string): string {
   } else if (diffInDays < 7) {
     return `${Math.floor(diffInDays)}d ago`
   } else {
-    return formatDate(date)
+    return formatDate(dateObj)
   }
 }
 
