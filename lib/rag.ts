@@ -16,11 +16,24 @@ export interface ChatContext {
 
 export async function retrieveContext(query: string, chatHistory?: string[]): Promise<ChatContext> {
   try {
+    console.log('🔍 retrieveContext called with:')
+    console.log('- query:', query)
+    console.log('- chatHistory length:', chatHistory?.length || 0)
+    console.log('- chatHistory:', chatHistory?.slice(-3) || [])
+    
     // Create search query (optionally incorporating chat history)
     const searchQuery = createSearchQuery(query, chatHistory)
+    console.log('🔎 Generated search query:', searchQuery)
     
     // Ask Slite directly
+    console.log('📞 Calling Slite API with query:', searchQuery)
     const sliteResponse = await sliteClient.ask(searchQuery)
+    console.log('📥 Slite API response:', {
+      hasAnswer: !!sliteResponse.answer,
+      answerLength: sliteResponse.answer?.length || 0,
+      sourcesCount: sliteResponse.sources?.length || 0,
+      sources: sliteResponse.sources?.map(s => s.title) || []
+    })
     
     // Extract and deduplicate sources by title
     const uniqueSources = new Set(sliteResponse.sources?.map(source => source.title) || [])
@@ -46,21 +59,41 @@ export async function retrieveContext(query: string, chatHistory?: string[]): Pr
 }
 
 function createSearchQuery(query: string, chatHistory?: string[]): string {
+  console.log('🔧 createSearchQuery called with:')
+  console.log('- query:', query)
+  console.log('- chatHistory:', chatHistory)
+  
   if (!chatHistory || chatHistory.length === 0) {
+    console.log('✅ No chat history, returning original query:', query)
     return query
   }
   
+  // For now, let's try using just the current query without chat history
+  // to see if that fixes the issue with subsequent messages
+  console.log('🧪 TEMPORARILY using only current query (ignoring chat history)')
+  return query
+  
+  // TODO: Implement smarter context combination later
+  /*
   // Combine recent chat history with current query for better context
   const recentHistory = chatHistory.slice(-3).join(' ')
   const combinedQuery = `${recentHistory} ${query}`
+  console.log('🔗 Combined query created:', combinedQuery)
   
   // Ensure we don't exceed token limits
   const maxTokens = 500
-  if (countTokens(combinedQuery) > maxTokens) {
-    return summarizeText(combinedQuery, maxTokens)
+  const tokens = countTokens(combinedQuery)
+  console.log('📊 Token count:', tokens, 'vs max:', maxTokens)
+  
+  if (tokens > maxTokens) {
+    const summarized = summarizeText(combinedQuery, maxTokens)
+    console.log('✂️ Query summarized:', summarized)
+    return summarized
   }
   
+  console.log('✅ Using combined query:', combinedQuery)
   return combinedQuery
+  */
 }
 
 
@@ -123,7 +156,14 @@ export async function generateResponse(
 }
 
 function createSystemPrompt(context: ChatContext): string {
+  console.log('🎭 createSystemPrompt called with context:')
+  console.log('- hasLowConfidence:', context.hasLowConfidence)
+  console.log('- hasAnswer:', !!context.answer)
+  console.log('- answerLength:', context.answer?.length || 0)
+  console.log('- sourcesCount:', context.sources.length)
+  
   if (context.hasLowConfidence) {
+    console.log('❌ Using LOW CONFIDENCE prompt (no Slite answer)')
     return `You are the internal SOP assistant for Stewart & Jane Group - think of me as your friendly neighborhood real estate expert! 🏠
 
 Hmm, that one isn't on the market yet! 🔍 But don't worry, I'm here to help you find what you need:
@@ -142,6 +182,7 @@ Let's find you the perfect process! What else can I help you navigate? 🧭`
 
   if (context.answer) {
     // Use Slite's answer directly with personality
+    console.log('✅ Using SLITE ANSWER prompt (has valid answer)')
     return `You are the friendly internal SOP assistant for Stewart & Jane Group! 🏠 You're knowledgeable, helpful, and occasionally make light real estate puns or references when appropriate.
 
 Based on our company documentation, here's what I found for you:
@@ -151,6 +192,7 @@ ${context.answer}
 Present this information in a warm, helpful manner - you can rephrase, add personality, and expand on the answer while staying true to the source material. Feel free to use emojis sparingly and make real estate references when they naturally fit the context. Think of yourself as the helpful colleague who knows all the processes and loves to share knowledge!`
   }
 
+  console.log('⚠️ Using FALLBACK prompt (no answer, no low confidence)')
   return `You are the friendly internal SOP assistant for Stewart & Jane Group! 🏠 Answer questions based on our company documentation in a warm, helpful, and occasionally playful manner. You can make light real estate puns when appropriate and use emojis sparingly to add personality while maintaining professionalism.`
 }
 
