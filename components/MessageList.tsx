@@ -37,7 +37,24 @@ export function MessageList({
 
   // Auto-scroll to bottom when new messages arrive
   React.useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+    const scrollToBottom = () => {
+      if (bottomRef.current) {
+        bottomRef.current.scrollIntoView({ 
+          behavior: "smooth", 
+          block: "end",
+          inline: "nearest" 
+        })
+      }
+      
+      // Direct scroll for native div
+      if (scrollAreaRef.current) {
+        scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight
+      }
+    }
+    
+    // Use timeout to ensure DOM has updated
+    const timeoutId = setTimeout(scrollToBottom, 100)
+    return () => clearTimeout(timeoutId)
   }, [messages, streamingContent])
 
   const handleCopy = async (content: string) => {
@@ -154,8 +171,8 @@ export function MessageList({
   }
 
   return (
-    <ScrollArea ref={scrollAreaRef} className="flex-1 bg-white">
-      <div className="space-y-4 bg-white">
+    <div ref={scrollAreaRef} className="flex-1 bg-white h-full overflow-y-auto overflow-x-hidden">
+      <div className="space-y-4 bg-white min-h-full p-4">
         {messages
           .filter(m => m.role !== "system")
           .map((message) => renderMessage(message))}
@@ -190,8 +207,8 @@ export function MessageList({
           </div>
         )}
         
-        <div ref={bottomRef} />
+        <div ref={bottomRef} className="h-4" />
       </div>
-    </ScrollArea>
+    </div>
   )
 }

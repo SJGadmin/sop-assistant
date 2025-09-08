@@ -336,7 +336,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-white">
       <Sidebar
         chats={chats}
         currentChatId={currentChatId}
