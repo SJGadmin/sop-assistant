@@ -5,11 +5,11 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url().optional(),
   
   // OpenAI
-  OPENAI_API_KEY: z.string().min(1).optional(),
+  OPENAI_API_KEY: z.string().min(1, "OpenAI API key is required"),
   OPENAI_CHAT_MODEL: z.string().default('gpt-4o-mini'),
   
   // Slite
-  SLITE_API_KEY: z.string().min(1).optional(),
+  SLITE_API_KEY: z.string().min(1, "Slite API key is required"),
   SLITE_CHANNEL_FILTER: z.string().optional(),
   
   // Rate Limiting
