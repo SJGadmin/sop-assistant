@@ -67,7 +67,7 @@ export function MessageList({
         key={message.id}
         className={cn(
           "group flex items-start space-x-3 p-6",
-          isUser ? "bg-muted/30" : "bg-background"
+          isUser ? "bg-gray-50" : "bg-white"
         )}
       >
         <Avatar className="h-8 w-8 shrink-0">
@@ -154,14 +154,14 @@ export function MessageList({
   }
 
   return (
-    <ScrollArea ref={scrollAreaRef} className="flex-1">
-      <div className="space-y-4">
+    <ScrollArea ref={scrollAreaRef} className="flex-1 bg-white">
+      <div className="space-y-4 bg-white">
         {messages
           .filter(m => m.role !== "system")
           .map((message) => renderMessage(message))}
         
         {isStreaming && (
-          <div className="group flex items-start space-x-3 p-6 bg-background">
+          <div className="group flex items-start space-x-3 p-6 bg-white">
             <Avatar className="h-8 w-8 shrink-0">
               <AvatarFallback className="p-1">
                 <img 

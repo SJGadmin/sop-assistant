@@ -261,7 +261,8 @@ export default function HomePage() {
                   messageCreated = true
                   
                   // Update chat title if this is the first assistant message
-                  if (messages.length === 1) {
+                  // Check if this is the first response (user + assistant = 2 messages)
+                  if (messages.length <= 2) {
                     setChats(prev => prev.map(chat => 
                       chat.id === chatId 
                         ? { ...chat, title: generateChatTitle(content), updatedAt: new Date() }
@@ -292,7 +293,8 @@ export default function HomePage() {
         setStreamingContent("")
         
         // Update chat title if this is the first assistant message
-        if (messages.length === 1) {
+        // Check if this is the first response (user + assistant = 2 messages)
+        if (messages.length <= 2) {
           setChats(prev => prev.map(chat => 
             chat.id === chatId 
               ? { ...chat, title: generateChatTitle(content), updatedAt: new Date() }
