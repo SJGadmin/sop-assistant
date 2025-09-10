@@ -20,16 +20,38 @@ export async function syncDocumentsFromSlite(): Promise<SyncResult> {
     console.log('📡 Fetching documents from Slite...')
     const response = await sliteClient.searchNotes(undefined, 1000) // Get up to 1000 docs
     
-    console.log(`📥 Found ${response.notes.length} documents in Slite`)
+    console.log(`📥 Found ${response.hits.length} documents in Slite`)
+    
+    // Collect all notes including children from collections
+    const allNotes: SliteNote[] = []
+    
+    for (const note of response.hits) {
+      allNotes.push(note)
+      
+      // If this is a collection, fetch its children
+      if (note.type === 'collection') {
+        console.log(`📁 Found collection "${note.title}", fetching children...`)
+        try {
+          const children = await sliteClient.getNoteChildren(note.id)
+          console.log(`📄 Found ${children.length} documents in collection "${note.title}"`)
+          allNotes.push(...children)
+        } catch (error) {
+          console.error(`❌ Error fetching children for collection ${note.title}:`, error)
+          errors++
+        }
+      }
+    }
+    
+    console.log(`📚 Total documents to sync (including children): ${allNotes.length}`)
 
     // Process each document
-    for (const note of response.notes) {
+    for (const note of allNotes) {
       try {
         await syncSingleDocument(note)
         synced++
         
         if (synced % 10 === 0) {
-          console.log(`🔄 Synced ${synced}/${response.notes.length} documents...`)
+          console.log(`🔄 Synced ${synced}/${allNotes.length} documents...`)
         }
       } catch (error) {
         console.error(`❌ Error syncing document ${note.id} (${note.title}):`, error)
@@ -37,7 +59,7 @@ export async function syncDocumentsFromSlite(): Promise<SyncResult> {
       }
     }
 
-    // Now fetch full content for each document
+    // Now fetch full content for each document (skip collections)
     console.log('📄 Fetching full content for documents...')
     const documents = await db.document.findMany({
       select: { sliteId: true, id: true, title: true }
@@ -48,7 +70,8 @@ export async function syncDocumentsFromSlite(): Promise<SyncResult> {
       try {
         const fullNote = await sliteClient.getNote(doc.sliteId)
         
-        if (fullNote.content || fullNote.markdown) {
+        // Skip collections as they don't have meaningful content
+        if (fullNote.type !== 'collection' && (fullNote.content || fullNote.markdown)) {
           const contentHash = generateContentHash(fullNote.content || fullNote.markdown || '')
           
           await db.document.update({

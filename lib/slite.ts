@@ -14,16 +14,20 @@ export interface SliteNote {
   title: string
   content?: string
   markdown?: string
-  createdAt: string
+  createdAt?: string
   updatedAt: string
   parentId?: string
   authorId?: string
   url?: string
+  type?: string
+  highlight?: string
+  parentNotes?: any[]
 }
 
 export interface SliteSearchResponse {
-  notes: SliteNote[]
-  total: number
+  hits: SliteNote[]
+  nbPages: number
+  page: number
 }
 
 class SliteClient {
