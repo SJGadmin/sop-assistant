@@ -9,6 +9,23 @@ export interface SliteAskResponse {
   }>
 }
 
+export interface SliteNote {
+  id: string
+  title: string
+  content?: string
+  markdown?: string
+  createdAt: string
+  updatedAt: string
+  parentId?: string
+  authorId?: string
+  url?: string
+}
+
+export interface SliteSearchResponse {
+  notes: SliteNote[]
+  total: number
+}
+
 class SliteClient {
   private baseUrl = config.slite.baseUrl
   private apiKey = config.slite.apiKey
@@ -49,6 +66,39 @@ class SliteClient {
     const response = await this.request<SliteAskResponse>(url)
     
     console.log('Slite response:', response)
+    return response
+  }
+
+  async searchNotes(query?: string, limit = 100): Promise<SliteSearchResponse> {
+    console.log('Searching Slite notes:', { query, limit })
+
+    let url = `/search-notes?limit=${limit}`
+    if (query) {
+      url += `&query=${encodeURIComponent(query)}`
+    }
+
+    const response = await this.request<SliteSearchResponse>(url)
+    console.log('Search response:', response)
+    return response
+  }
+
+  async getNote(noteId: string): Promise<SliteNote> {
+    console.log('Fetching Slite note:', noteId)
+
+    const url = `/notes/${noteId}`
+    const response = await this.request<SliteNote>(url)
+    
+    console.log('Note response:', response)
+    return response
+  }
+
+  async getNoteChildren(noteId: string): Promise<SliteNote[]> {
+    console.log('Fetching note children:', noteId)
+
+    const url = `/notes/${noteId}/children`
+    const response = await this.request<SliteNote[]>(url)
+    
+    console.log('Children response:', response)
     return response
   }
 

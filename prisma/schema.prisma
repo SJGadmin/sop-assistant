@@ -38,17 +38,25 @@ model Message {
 }
 
 model Document {
-  id        String   @id @default(cuid())
-  sliteId   String   @unique
-  title     String
-  updatedAt DateTime
-  hash      String
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  sliteId     String   @unique
+  title       String
+  content     String?  @db.Text  // Full HTML content for display
+  markdown    String?  @db.Text  // Markdown content from Slite
+  url         String?             // Slite URL
+  parentId    String?             // Parent document ID for hierarchy
+  authorId    String?             // Author from Slite
+  sliteCreatedAt DateTime?        // Original creation date in Slite
+  sliteUpdatedAt DateTime         // Last updated in Slite
+  hash        String              // Content hash for change detection
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   chunks Chunk[]
 
   @@index([sliteId])
-  @@index([updatedAt])
+  @@index([sliteUpdatedAt])
+  @@index([parentId])
   @@map("documents")
 }
 

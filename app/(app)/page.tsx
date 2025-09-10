@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { Sidebar, type Chat } from "@/components/Sidebar"
 import { MessageList, type Message } from "@/components/MessageList"
 import { ChatInput } from "@/components/ChatInput"
@@ -364,10 +365,22 @@ export default function HomePage() {
                   />
                 </div>
                 <h1 className="text-3xl font-bold text-gray-900 mb-4">Welcome to SOP Assistant</h1>
-                <p className="text-gray-600 text-lg">
+                <p className="text-gray-600 text-lg mb-6">
                   Your AI-powered guide to Stewart & Jane Group's standard operating procedures, 
                   policies, and documentation.
                 </p>
+                
+                {/* Action Buttons */}
+                <div className="flex justify-center mb-8">
+                  <Link href="/docs">
+                    <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200 flex items-center space-x-2">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span>See All Docs</span>
+                    </button>
+                  </Link>
+                </div>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
