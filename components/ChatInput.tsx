@@ -78,7 +78,7 @@ export function ChatInput({
                 className="w-full min-h-[56px] max-h-[200px] resize-none pr-12 py-4 px-4 border-2 border-gray-300 rounded-2xl shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-500 transition-all duration-200"
                 rows={1}
               />
-              <div className="absolute bottom-2 right-2">
+              <div className="absolute bottom-3 right-3">
                 {isStreaming ? (
                   <button
                     type="button"
