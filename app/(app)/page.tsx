@@ -347,7 +347,7 @@ export default function HomePage() {
       />
       
       <div className="flex flex-1 flex-col">
-        {currentChatId && messages.length > 0 ? (
+        {currentChatId ? (
           <MessageList
             messages={messages}
             isStreaming={isStreaming}
