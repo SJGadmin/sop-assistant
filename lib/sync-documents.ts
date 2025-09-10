@@ -32,7 +32,8 @@ export async function syncDocumentsFromSlite(): Promise<SyncResult> {
       if (note.type === 'collection') {
         console.log(`📁 Found collection "${note.title}", fetching children...`)
         try {
-          const children = await sliteClient.getNoteChildren(note.id)
+          const childrenResponse = await sliteClient.getNoteChildren(note.id)
+          const children = childrenResponse.notes || []
           console.log(`📄 Found ${children.length} documents in collection "${note.title}"`)
           allNotes.push(...children)
         } catch (error) {

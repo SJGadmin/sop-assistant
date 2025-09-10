@@ -96,11 +96,11 @@ class SliteClient {
     return response
   }
 
-  async getNoteChildren(noteId: string): Promise<SliteNote[]> {
+  async getNoteChildren(noteId: string): Promise<{ notes: SliteNote[] }> {
     console.log('Fetching note children:', noteId)
 
     const url = `/notes/${noteId}/children`
-    const response = await this.request<SliteNote[]>(url)
+    const response = await this.request<{ notes: SliteNote[] }>(url)
     
     console.log('Children response:', response)
     return response

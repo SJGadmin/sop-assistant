@@ -5,6 +5,7 @@ import { ArrowLeft, Search, FileText } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import ReactMarkdown from "react-markdown"
 
 interface Document {
   id: string
@@ -70,13 +71,17 @@ export default function DocsPage() {
   // Generate preview text from markdown or content
   const getPreview = (doc: Document): string => {
     const text = doc.markdown || doc.content || ""
-    // Remove markdown syntax and HTML tags, get first 150 characters
+    // Remove markdown syntax, HTML tags, and URLs, get first 150 characters
     const cleanText = text
+      .replace(/!\[.*?\]\(.*?\)/g, '') // Remove markdown images
+      .replace(/\[.*?\]\(.*?\)/g, '') // Remove markdown links
       .replace(/#{1,6}\s+/g, '') // Remove markdown headers
       .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove bold markdown
       .replace(/\*([^*]+)\*/g, '$1') // Remove italic markdown
       .replace(/<[^>]*>/g, '') // Remove HTML tags
+      .replace(/https?:\/\/[^\s]+/g, '') // Remove URLs
       .replace(/\n+/g, ' ') // Replace newlines with spaces
+      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
       .trim()
     
     return cleanText.length > 150 ? cleanText.substring(0, 150) + '...' : cleanText
@@ -116,9 +121,9 @@ export default function DocsPage() {
           <div className="max-w-4xl mx-auto p-6">
             <div className="prose prose-lg max-w-none">
               {selectedDoc.markdown ? (
-                <div dangerouslySetInnerHTML={{ __html: selectedDoc.markdown }} />
+                <ReactMarkdown>{selectedDoc.markdown}</ReactMarkdown>
               ) : selectedDoc.content ? (
-                <div dangerouslySetInnerHTML={{ __html: selectedDoc.content }} />
+                <ReactMarkdown>{selectedDoc.content}</ReactMarkdown>
               ) : (
                 <p className="text-gray-500">No content available</p>
               )}
