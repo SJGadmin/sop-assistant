@@ -46,6 +46,31 @@ export default function HomePage() {
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  // Report dimensions for iframe embedding
+  React.useEffect(() => {
+    const reportDimensions = () => {
+      const width = window.innerWidth
+      const height = window.innerHeight
+      console.log(`SOP Assistant Dimensions - Width: ${width}px, Height: ${height}px`)
+      
+      // Post message to parent frame if embedded
+      if (window.parent !== window) {
+        window.parent.postMessage({
+          type: 'sop-assistant-resize',
+          width,
+          height
+        }, '*')
+      }
+    }
+
+    // Report initial dimensions
+    reportDimensions()
+
+    // Report on resize
+    window.addEventListener('resize', reportDimensions)
+    return () => window.removeEventListener('resize', reportDimensions)
+  }, [])
+
   const loadChats = async () => {
     try {
       const response = await fetch('/api/chats')

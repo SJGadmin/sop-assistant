@@ -13,6 +13,24 @@ const nextConfig = {
   // Force proper CSS and font optimization
   optimizeFonts: true,
   swcMinify: true,
+  // Headers for iframe embedding
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN', // Allow embedding in same origin
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'self' *.wordpress.com *.wpengine.com;", // Allow WordPress embedding
+          },
+        ],
+      },
+    ]
+  },
 }
 
 module.exports = nextConfig
