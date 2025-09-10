@@ -16,21 +16,32 @@ export async function syncDocumentsFromSlite(): Promise<SyncResult> {
   let errors = 0
 
   try {
+    // First, clean up any existing collection documents
+    console.log('🧹 Cleaning up collection documents from database...')
+    const collectionsToRemove = ['BXADT-mGiAZAIN', 'qzpNTBo0mNLJqw', 'yPjLXWpDnn6ei2']
+    for (const collectionId of collectionsToRemove) {
+      try {
+        await db.document.deleteMany({
+          where: { sliteId: collectionId }
+        })
+        console.log(`🗑️ Removed collection: ${collectionId}`)
+      } catch (error) {
+        console.error(`❌ Error removing collection ${collectionId}:`, error)
+      }
+    }
     // Fetch all documents from Slite
     console.log('📡 Fetching documents from Slite...')
     const response = await sliteClient.searchNotes(undefined, 1000) // Get up to 1000 docs
     
     console.log(`📥 Found ${response.hits.length} documents in Slite`)
     
-    // Collect all notes including children from collections
+    // Collect all notes, but exclude collections and fetch their children instead
     const allNotes: SliteNote[] = []
     
     for (const note of response.hits) {
-      allNotes.push(note)
-      
-      // If this is a collection, fetch its children
+      // If this is a collection, fetch its children but don't include the collection itself
       if (note.type === 'collection') {
-        console.log(`📁 Found collection "${note.title}", fetching children...`)
+        console.log(`📁 Found collection "${note.title}", fetching children (excluding collection itself)...`)
         try {
           const childrenResponse = await sliteClient.getNoteChildren(note.id)
           const children = childrenResponse.notes || []
@@ -40,6 +51,9 @@ export async function syncDocumentsFromSlite(): Promise<SyncResult> {
           console.error(`❌ Error fetching children for collection ${note.title}:`, error)
           errors++
         }
+      } else {
+        // Only add non-collection documents
+        allNotes.push(note)
       }
     }
     
