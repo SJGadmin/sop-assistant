@@ -21,11 +21,7 @@ const nextConfig = {
         headers: [
           {
             key: 'X-Frame-Options',
-            value: 'SAMEORIGIN', // Allow embedding in same origin
-          },
-          {
-            key: 'Content-Security-Policy',
-            value: "frame-ancestors 'self' *.wordpress.com *.wpengine.com;", // Allow WordPress embedding
+            value: 'ALLOWALL', // Allow embedding from any domain
           },
         ],
       },
