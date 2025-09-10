@@ -5,7 +5,7 @@ import { ArrowLeft, Search, FileText } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import ReactMarkdown from "react-markdown"
+import { SOPRenderer } from "@/components/SOPRenderer"
 
 interface Document {
   id: string
@@ -117,15 +117,18 @@ export default function DocsPage() {
         </div>
 
         {/* Document Content */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto p-6">
-            <div className="prose prose-lg max-w-none">
+        <div className="flex-1 overflow-y-auto bg-gray-50">
+          <div className="max-w-5xl mx-auto p-8">
+            <div className="bg-white rounded-xl shadow-sm p-8 border border-gray-200">
               {selectedDoc.markdown ? (
-                <ReactMarkdown>{selectedDoc.markdown}</ReactMarkdown>
+                <SOPRenderer content={selectedDoc.markdown} />
               ) : selectedDoc.content ? (
-                <ReactMarkdown>{selectedDoc.content}</ReactMarkdown>
+                <SOPRenderer content={selectedDoc.content} />
               ) : (
-                <p className="text-gray-500">No content available</p>
+                <div className="text-center py-12">
+                  <FileText className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 text-lg">No content available</p>
+                </div>
               )}
             </div>
           </div>
