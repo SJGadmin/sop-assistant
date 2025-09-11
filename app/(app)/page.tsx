@@ -165,6 +165,29 @@ export default function HomePage() {
     }
   }
 
+  const updateChatTitle = async (chatId: string, title: string) => {
+    try {
+      const response = await fetch(`/api/chats/${chatId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title }),
+      })
+      
+      if (response.ok) {
+        // Update local state
+        setChats(prev => prev.map(chat => 
+          chat.id === chatId 
+            ? { ...chat, title, updatedAt: new Date() }
+            : chat
+        ))
+      }
+    } catch (error) {
+      console.error('Failed to update chat title:', error)
+    }
+  }
+
   const handleSendMessage = async (content: string) => {
     if (!content.trim()) return
 
@@ -180,15 +203,19 @@ export default function HomePage() {
           const data = await response.json()
           chatId = data.chatId
           
+          const chatTitle = generateChatTitle(content)
           const newChat: Chat = {
             id: data.chatId, // Use data.chatId directly since we know it exists
-            title: generateChatTitle(content),
+            title: chatTitle,
             createdAt: new Date(),
             updatedAt: new Date(),
           }
           
           setChats(prev => [newChat, ...prev])
           setCurrentChatId(data.chatId)
+          
+          // Update title in database
+          await updateChatTitle(data.chatId, chatTitle)
         } else {
           throw new Error('Failed to create chat')
         }
@@ -289,11 +316,8 @@ export default function HomePage() {
                   // Update chat title if this is the first assistant message
                   // Check if this is the first response (user + assistant = 2 messages)
                   if (messages.length <= 2) {
-                    setChats(prev => prev.map(chat => 
-                      chat.id === chatId 
-                        ? { ...chat, title: generateChatTitle(content), updatedAt: new Date() }
-                        : chat
-                    ))
+                    const newTitle = generateChatTitle(content)
+                    updateChatTitle(chatId, newTitle)
                   }
                 }
               } catch (parseError) {
@@ -321,11 +345,8 @@ export default function HomePage() {
         // Update chat title if this is the first assistant message
         // Check if this is the first response (user + assistant = 2 messages)
         if (messages.length <= 2) {
-          setChats(prev => prev.map(chat => 
-            chat.id === chatId 
-              ? { ...chat, title: generateChatTitle(content), updatedAt: new Date() }
-              : chat
-          ))
+          const newTitle = generateChatTitle(content)
+          updateChatTitle(chatId, newTitle)
         }
       }
       

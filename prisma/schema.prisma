@@ -28,6 +28,7 @@ model Message {
   chatId     String
   role       MessageRole
   content    String      @db.Text
+  sources    String[]    @default([])
   tokensUsed Int         @default(0)
   createdAt  DateTime    @default(now())
 

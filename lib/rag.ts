@@ -290,6 +290,7 @@ export async function generateResponseAndSave(
             chatId,
             role: "assistant",
             content: fullContent,
+            sources: context.sources,
             tokensUsed: countTokens(fullContent),
           },
         })

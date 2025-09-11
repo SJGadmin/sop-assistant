@@ -30,31 +30,58 @@ export async function GET(
         id: true,
         role: true,
         content: true,
+        sources: true,
         createdAt: true,
       },
     })
 
-    // Extract sources from assistant messages
-    const messagesWithSources = messages.map(message => {
-      if (message.role === "assistant") {
-        // Look for sources pattern in content
-        const sourcesMatch = message.content.match(/Sources: (.+)$/m)
-        if (sourcesMatch) {
-          const sources = sourcesMatch[1].split(', ').map(s => s.trim())
-          const content = message.content.replace(/\n\nSources: .+$/m, '')
-          return {
-            ...message,
-            content,
-            sources,
-          }
-        }
-      }
-      return message
-    })
-
-    return NextResponse.json({ messages: messagesWithSources })
+    return NextResponse.json({ messages })
   } catch (error) {
     console.error("Error fetching messages:", error)
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Dynamic import to avoid build-time issues
+    const { db } = await import("@/lib/db")
+    
+    const { title } = await request.json()
+
+    if (!title || typeof title !== "string") {
+      return NextResponse.json(
+        { error: "Title is required" },
+        { status: 400 }
+      )
+    }
+
+    const chat = await db.chat.findFirst({
+      where: {
+        id: params.id,
+        deletedAt: null,
+      },
+    })
+
+    if (!chat) {
+      return NextResponse.json({ error: "Chat not found" }, { status: 404 })
+    }
+
+    // Update the chat title
+    await db.chat.update({
+      where: { id: params.id },
+      data: { title },
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Error updating chat:", error)
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
