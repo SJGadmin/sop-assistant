@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ArrowLeft, Search, FileText } from "lucide-react"
+import { ArrowLeft, Search, FileText, CheckCircle, XCircle, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,10 +17,20 @@ interface Document {
   sliteUpdatedAt: Date
 }
 
+type SyncStatus = 'idle' | 'syncing' | 'success' | 'error'
+
+interface SyncResult {
+  synced: number
+  updated: number
+  errors: number
+}
+
 export default function DocsPage() {
   const [documents, setDocuments] = React.useState<Document[]>([])
   const [loading, setLoading] = React.useState(true)
-  const [syncing, setSyncing] = React.useState(false)
+  const [syncStatus, setSyncStatus] = React.useState<SyncStatus>('idle')
+  const [syncResult, setSyncResult] = React.useState<SyncResult | null>(null)
+  const [syncError, setSyncError] = React.useState<string | null>(null)
   const [searchQuery, setSearchQuery] = React.useState("")
   const [selectedDoc, setSelectedDoc] = React.useState<Document | null>(null)
 
@@ -43,23 +53,38 @@ export default function DocsPage() {
   }
 
   const syncDocuments = async () => {
-    setSyncing(true)
+    setSyncStatus('syncing')
+    setSyncResult(null)
+    setSyncError(null)
+
     try {
       const response = await fetch('/api/documents/sync', {
         method: 'POST',
       })
-      if (response.ok) {
-        const data = await response.json()
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setSyncStatus('success')
+        setSyncResult(data.result)
         console.log('Sync result:', data.result)
         // Reload documents after sync
         await loadDocuments()
+
+        // Auto-hide success state after 5 seconds
+        setTimeout(() => {
+          setSyncStatus('idle')
+        }, 5000)
       } else {
-        console.error('Sync failed:', await response.text())
+        setSyncStatus('error')
+        setSyncError(data.details || data.error || 'Sync failed')
+        console.error('Sync failed:', data.error)
       }
     } catch (error) {
+      setSyncStatus('error')
+      setSyncError(error instanceof Error ? error.message : 'Network error')
       console.error('Sync error:', error)
     }
-    setSyncing(false)
   }
 
   // Filter documents based on search
@@ -155,18 +180,48 @@ export default function DocsPage() {
           </div>
         </div>
         <div className="flex items-center space-x-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={syncDocuments}
-            disabled={syncing}
-            className="flex items-center space-x-2"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span>{syncing ? 'Syncing...' : 'Sync from Slite'}</span>
-          </Button>
+          <div className="relative">
+            <Button
+              variant={syncStatus === 'success' ? 'default' : syncStatus === 'error' ? 'destructive' : 'ghost'}
+              size="sm"
+              onClick={syncDocuments}
+              disabled={syncStatus === 'syncing'}
+              className={`flex items-center space-x-2 ${
+                syncStatus === 'success' ? 'bg-green-600 hover:bg-green-700 text-white' :
+                syncStatus === 'error' ? 'bg-red-600 hover:bg-red-700 text-white' : ''
+              }`}
+              title={syncStatus === 'error' && syncError ? syncError : undefined}
+            >
+              {syncStatus === 'syncing' && (
+                <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              )}
+              {syncStatus === 'success' && <CheckCircle className="w-4 h-4" />}
+              {syncStatus === 'error' && <XCircle className="w-4 h-4" />}
+              {syncStatus === 'idle' && (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              )}
+              <span>
+                {syncStatus === 'syncing' && 'Syncing...'}
+                {syncStatus === 'success' && syncResult && `Synced ${syncResult.synced}${syncResult.updated > 0 ? `, updated ${syncResult.updated}` : ''}${syncResult.errors > 0 ? `, ${syncResult.errors} errors` : ''}`}
+                {syncStatus === 'error' && 'Sync failed'}
+                {syncStatus === 'idle' && 'Sync from Slite'}
+              </span>
+            </Button>
+
+            {/* Error message tooltip */}
+            {syncStatus === 'error' && syncError && (
+              <div className="absolute top-full left-0 mt-1 p-2 bg-red-50 border border-red-200 rounded-md shadow-lg z-10 max-w-xs">
+                <div className="flex items-start space-x-2">
+                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-red-700">{syncError}</p>
+                </div>
+              </div>
+            )}
+          </div>
           <Link href="/">
             <Button variant="outline" size="sm">
               Back to Chat
