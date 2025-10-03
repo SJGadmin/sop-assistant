@@ -74,9 +74,15 @@ export async function syncDocumentsFromSlite(): Promise<SyncResult> {
       }
     }
 
-    // Now fetch full content for each document (skip collections)
-    console.log('📄 Fetching full content for documents...')
+    // Now fetch full content for documents that don't have it yet
+    console.log('📄 Fetching full content for documents without content...')
     const documents = await db.document.findMany({
+      where: {
+        AND: [
+          { content: null },
+          { markdown: null }
+        ]
+      },
       select: { sliteId: true, id: true, title: true }
     })
 
