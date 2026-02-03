@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import ReactMarkdown from "react-markdown"
 import { CheckCircle, Settings, Users } from "lucide-react"
 
 interface SOPRendererProps {
@@ -9,6 +8,8 @@ interface SOPRendererProps {
 }
 
 export function SOPRenderer({ content }: SOPRendererProps) {
+  // Check if content is HTML (starts with < tag) or markdown
+  const isHTML = content.trim().startsWith('<')
   const customComponents = {
     // Custom heading renderer
     h1: ({ children, ...props }: any) => (
@@ -164,6 +165,158 @@ export function SOPRenderer({ content }: SOPRendererProps) {
       </em>
     ),
   }
+
+  // If content is HTML, render it directly with proper styling
+  if (isHTML) {
+    return (
+      <>
+        <div
+          className="sop-content prose prose-lg max-w-none"
+          dangerouslySetInnerHTML={{ __html: content }}
+        />
+        <style jsx global>{`
+          .sop-content {
+            color: #374151;
+            line-height: 1.75;
+          }
+
+          .sop-content h1 {
+            font-size: 2em;
+            font-weight: bold;
+            color: #111827;
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+            padding-bottom: 0.5em;
+            border-bottom: 2px solid #e5e7eb;
+          }
+
+          .sop-content h2 {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #111827;
+            margin-top: 1.5em;
+            margin-bottom: 0.75em;
+          }
+
+          .sop-content h3 {
+            font-size: 1.25em;
+            font-weight: 600;
+            color: #1f2937;
+            margin-top: 1.25em;
+            margin-bottom: 0.5em;
+          }
+
+          .sop-content p {
+            margin-bottom: 1em;
+            color: #4b5563;
+          }
+
+          .sop-content ul,
+          .sop-content ol {
+            margin: 1em 0;
+            padding-left: 1.5em;
+          }
+
+          .sop-content li {
+            margin: 0.5em 0;
+            color: #4b5563;
+          }
+
+          .sop-content ul {
+            list-style-type: disc;
+          }
+
+          .sop-content ol {
+            list-style-type: decimal;
+          }
+
+          .sop-content li > p {
+            margin: 0.25em 0;
+          }
+
+          .sop-content strong {
+            font-weight: 600;
+            color: #111827;
+          }
+
+          .sop-content em {
+            font-style: italic;
+          }
+
+          .sop-content a {
+            color: #2563eb;
+            text-decoration: underline;
+          }
+
+          .sop-content a:hover {
+            color: #1d4ed8;
+          }
+
+          .sop-content blockquote {
+            border-left: 4px solid #e5e7eb;
+            padding-left: 1em;
+            margin: 1em 0;
+            color: #6b7280;
+            font-style: italic;
+          }
+
+          .sop-content code {
+            background-color: #f3f4f6;
+            padding: 0.2em 0.4em;
+            border-radius: 0.25em;
+            font-family: ui-monospace, monospace;
+            font-size: 0.9em;
+          }
+
+          .sop-content pre {
+            background-color: #f3f4f6;
+            padding: 1em;
+            border-radius: 0.5em;
+            overflow-x: auto;
+            margin: 1em 0;
+          }
+
+          .sop-content pre code {
+            background: none;
+            padding: 0;
+          }
+
+          .sop-content hr {
+            border: none;
+            border-top: 1px solid #e5e7eb;
+            margin: 2em 0;
+          }
+
+          .sop-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1em 0;
+          }
+
+          .sop-content th,
+          .sop-content td {
+            border: 1px solid #e5e7eb;
+            padding: 0.5em 1em;
+            text-align: left;
+          }
+
+          .sop-content th {
+            background-color: #f9fafb;
+            font-weight: 600;
+          }
+
+          .sop-content br {
+            display: block;
+            margin: 0.5em 0;
+            content: "";
+          }
+        `}</style>
+      </>
+    )
+  }
+
+  // Otherwise, render as markdown
+  const ReactMarkdown = require('react-markdown').default
 
   return (
     <div className="sop-content">
