@@ -212,9 +212,9 @@ export default function AdminPage() {
   // Editor View
   if (viewMode === 'edit' || viewMode === 'create') {
     return (
-      <div className="min-h-screen bg-white flex flex-col">
+      <div className="h-full bg-white flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b bg-gray-50">
+        <div className="flex-shrink-0 flex items-center justify-between p-4 border-b bg-gray-50">
           <div className="flex items-center space-x-4">
             <Button
               variant="ghost"
@@ -275,7 +275,7 @@ export default function AdminPage() {
 
         {/* Error Banner */}
         {error && (
-          <div className="bg-red-50 border-b border-red-200 px-4 py-3 flex items-center space-x-2 text-red-700">
+          <div className="flex-shrink-0 bg-red-50 border-b border-red-200 px-4 py-3 flex items-center space-x-2 text-red-700">
             <AlertCircle className="h-4 w-4" />
             <span>{error}</span>
             <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700">
@@ -285,7 +285,7 @@ export default function AdminPage() {
         )}
 
         {/* Editor Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 min-h-0">
           <div className="max-w-4xl mx-auto space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -317,9 +317,9 @@ export default function AdminPage() {
 
   // List View
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="h-full bg-white flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-gray-50">
+      <div className="flex-shrink-0 flex items-center justify-between p-4 border-b bg-gray-50">
         <div className="flex items-center space-x-4">
           <div className="w-10 h-10 rounded-lg overflow-hidden">
             <img
@@ -353,7 +353,7 @@ export default function AdminPage() {
 
       {/* Error Banner */}
       {error && (
-        <div className="bg-red-50 border-b border-red-200 px-4 py-3 flex items-center space-x-2 text-red-700">
+        <div className="flex-shrink-0 bg-red-50 border-b border-red-200 px-4 py-3 flex items-center space-x-2 text-red-700">
           <AlertCircle className="h-4 w-4" />
           <span>{error}</span>
           <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700">
@@ -363,7 +363,7 @@ export default function AdminPage() {
       )}
 
       {/* Document List */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-6 min-h-0">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
