@@ -39,25 +39,19 @@ model Message {
 }
 
 model Document {
-  id          String   @id @default(cuid())
-  sliteId     String   @unique
+  id          String         @id @default(cuid())
   title       String
-  content     String?  @db.Text  // Full HTML content for display
-  markdown    String?  @db.Text  // Markdown content from Slite
-  url         String?             // Slite URL
-  parentId    String?             // Parent document ID for hierarchy
-  authorId    String?             // Author from Slite
-  sliteCreatedAt DateTime?        // Original creation date in Slite
-  sliteUpdatedAt DateTime         // Last updated in Slite
-  hash        String              // Content hash for change detection
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  content     String?        @db.Text  // Full HTML content for display
+  markdown    String?        @db.Text  // Markdown content (editable)
+  blobUrl     String?                  // Vercel Blob storage URL
+  status      DocumentStatus @default(DRAFT)
+  publishedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   chunks Chunk[]
 
-  @@index([sliteId])
-  @@index([sliteUpdatedAt])
-  @@index([parentId])
+  @@index([status])
   @@map("documents")
 }
 
@@ -83,4 +77,11 @@ enum MessageRole {
   assistant
   system
   tool
+}
+
+enum DocumentStatus {
+  DRAFT
+  PROCESSING
+  PUBLISHED
+  ARCHIVED
 }

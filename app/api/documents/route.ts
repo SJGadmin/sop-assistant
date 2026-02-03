@@ -1,39 +1,46 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 
 export const runtime = "nodejs"
 
-export async function GET(request: NextRequest) {
+// NOTE: After schema changes, run `npm run db:generate` to update Prisma types
+export async function GET() {
   try {
     // Dynamic imports to avoid build-time issues
     const { db } = await import("@/lib/db")
 
-    const documents = await db.document.findMany({
+    // Only return published documents for public viewing
+    // Using raw query to avoid type issues until Prisma client is regenerated
+    const documents = await (db.document.findMany as any)({
+      where: {
+        status: 'PUBLISHED',
+      },
       orderBy: {
-        sliteUpdatedAt: 'desc',
+        updatedAt: 'desc',
       },
       select: {
         id: true,
-        sliteId: true,
         title: true,
         content: true,
         markdown: true,
-        url: true,
-        sliteUpdatedAt: true,
-        sliteCreatedAt: true,
+        status: true,
+        publishedAt: true,
+        updatedAt: true,
+        createdAt: true,
       },
     })
 
     return NextResponse.json({
-      documents: documents.map(doc => ({
+      documents: documents.map((doc: any) => ({
         ...doc,
-        sliteUpdatedAt: doc.sliteUpdatedAt.toISOString(),
-        sliteCreatedAt: doc.sliteCreatedAt?.toISOString(),
+        updatedAt: doc.updatedAt?.toISOString?.() || doc.updatedAt,
+        createdAt: doc.createdAt?.toISOString?.() || doc.createdAt,
+        publishedAt: doc.publishedAt?.toISOString?.() || doc.publishedAt,
       })),
     })
 
   } catch (error) {
     console.error("Documents API error:", error)
-    
+
     return NextResponse.json(
       { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }

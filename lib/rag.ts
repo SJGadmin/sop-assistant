@@ -1,6 +1,6 @@
 import { db } from './db'
-import { countTokens, summarizeText } from './chunker'
-import { sliteClient } from './slite'
+import { countTokens } from './chunker'
+import { getEmbedding } from './embeddings'
 import OpenAI from 'openai'
 import config from './config'
 
@@ -14,43 +14,101 @@ export interface ChatContext {
   hasLowConfidence: boolean
 }
 
+interface ChunkResult {
+  id: string
+  text: string
+  tokens: number
+  documentId: string
+  documentTitle: string
+  similarity: number
+}
+
+async function searchSimilarChunks(query: string, topK: number = config.rag.topK): Promise<ChunkResult[]> {
+  console.log('🔍 searchSimilarChunks called with query:', query)
+
+  // Generate embedding for the query
+  const embedding = await getEmbedding(query)
+  console.log('📊 Generated embedding, dimensions:', embedding.length)
+
+  // Perform pgvector cosine similarity search
+  const chunks = await db.$queryRaw`
+    SELECT
+      c.id,
+      c.text,
+      c.tokens,
+      c."documentId",
+      d.title as "documentTitle",
+      1 - (c.embedding <=> ${embedding}::vector) as similarity
+    FROM chunks c
+    JOIN documents d ON c."documentId" = d.id
+    WHERE d.status = 'PUBLISHED'
+      AND c.embedding IS NOT NULL
+    ORDER BY c.embedding <=> ${embedding}::vector
+    LIMIT ${topK}
+  ` as ChunkResult[]
+
+  console.log('📥 Raw chunks from DB:', chunks.length)
+
+  // Filter by minimum similarity threshold
+  const filteredChunks = chunks.filter(chunk => chunk.similarity >= config.rag.minSimilarity)
+
+  console.log('✅ Filtered chunks (above similarity threshold):', filteredChunks.length)
+  if (filteredChunks.length > 0) {
+    console.log('📈 Similarity range:',
+      Math.min(...filteredChunks.map(c => c.similarity)).toFixed(3),
+      '-',
+      Math.max(...filteredChunks.map(c => c.similarity)).toFixed(3)
+    )
+  }
+
+  return filteredChunks
+}
+
 export async function retrieveContext(query: string, chatHistory?: string[]): Promise<ChatContext> {
   try {
     console.log('🔍 retrieveContext called with:')
     console.log('- query:', query)
     console.log('- chatHistory length:', chatHistory?.length || 0)
-    console.log('- chatHistory:', chatHistory?.slice(-3) || [])
-    
+
     // Create search query (optionally incorporating chat history)
     const searchQuery = createSearchQuery(query, chatHistory)
     console.log('🔎 Generated search query:', searchQuery)
-    
-    // Ask Slite directly
-    console.log('📞 Calling Slite API with query:', searchQuery)
-    const sliteResponse = await sliteClient.ask(searchQuery)
-    console.log('📥 Slite API response:', {
-      hasAnswer: !!sliteResponse.answer,
-      answerLength: sliteResponse.answer?.length || 0,
-      sourcesCount: sliteResponse.sources?.length || 0,
-      sources: sliteResponse.sources?.map(s => s.title) || []
+
+    // Search for similar chunks using local vector search
+    console.log('📞 Searching local vector database...')
+    const chunks = await searchSimilarChunks(searchQuery)
+
+    console.log('📥 Search results:', {
+      chunksFound: chunks.length,
+      sources: Array.from(new Set(chunks.map(c => c.documentTitle)))
     })
-    
-    // Extract and deduplicate sources by title
-    const uniqueSources = new Set(sliteResponse.sources?.map(source => source.title) || [])
-    const sources = Array.from(uniqueSources)
-    
-    // Check if Slite returned an empty or very short answer
-    const hasEmptyAnswer = !sliteResponse.answer || sliteResponse.answer.trim().length < 10
-    
+
+    // Check if we found any relevant chunks
+    if (chunks.length === 0) {
+      console.log('❌ No relevant chunks found')
+      return {
+        sources: [],
+        hasLowConfidence: true,
+      }
+    }
+
+    // Build context from chunks
+    const contextText = chunks
+      .map(chunk => `[From: ${chunk.documentTitle}]\n${chunk.text}`)
+      .join('\n\n---\n\n')
+
+    // Extract unique document titles as sources
+    const sources = Array.from(new Set(chunks.map(chunk => chunk.documentTitle)))
+
     return {
-      answer: sliteResponse.answer,
+      answer: contextText,
       sources,
-      hasLowConfidence: hasEmptyAnswer,
+      hasLowConfidence: false,
     }
   } catch (error) {
-    console.error('Slite API error:', error)
-    
-    // Return low confidence context if Slite fails
+    console.error('Vector search error:', error)
+
+    // Return low confidence context if search fails
     return {
       sources: [],
       hasLowConfidence: true,
@@ -62,38 +120,16 @@ function createSearchQuery(query: string, chatHistory?: string[]): string {
   console.log('🔧 createSearchQuery called with:')
   console.log('- query:', query)
   console.log('- chatHistory:', chatHistory)
-  
+
   if (!chatHistory || chatHistory.length === 0) {
     console.log('✅ No chat history, returning original query:', query)
     return query
   }
-  
+
   // For now, let's try using just the current query without chat history
   // to see if that fixes the issue with subsequent messages
-  console.log('🧪 TEMPORARILY using only current query (ignoring chat history)')
+  console.log('🧪 Using only current query (ignoring chat history for search)')
   return query
-  
-  // TODO: Implement smarter context combination later
-  /*
-  // Combine recent chat history with current query for better context
-  const recentHistory = chatHistory.slice(-3).join(' ')
-  const combinedQuery = `${recentHistory} ${query}`
-  console.log('🔗 Combined query created:', combinedQuery)
-  
-  // Ensure we don't exceed token limits
-  const maxTokens = 500
-  const tokens = countTokens(combinedQuery)
-  console.log('📊 Token count:', tokens, 'vs max:', maxTokens)
-  
-  if (tokens > maxTokens) {
-    const summarized = summarizeText(combinedQuery, maxTokens)
-    console.log('✂️ Query summarized:', summarized)
-    return summarized
-  }
-  
-  console.log('✅ Using combined query:', combinedQuery)
-  return combinedQuery
-  */
 }
 
 
@@ -104,7 +140,7 @@ export async function generateResponse(
 ): Promise<ReadableStream<Uint8Array>> {
   const systemPrompt = createSystemPrompt(context)
   const messages = createMessages(systemPrompt, query, chatHistory)
-  
+
   const response = await openai.chat.completions.create({
     model: config.openai.chatModel,
     messages,
@@ -115,12 +151,12 @@ export async function generateResponse(
 
   // Convert OpenAI stream to Server-Sent Events format
   const encoder = new TextEncoder()
-  
+
   return new ReadableStream({
     async start(controller) {
       try {
         let fullContent = ""
-        
+
         for await (const chunk of response) {
           const content = chunk.choices[0]?.delta?.content
           if (content) {
@@ -131,17 +167,17 @@ export async function generateResponse(
             )
           }
         }
-        
+
         // Send final message with sources if available
         if (context.sources.length > 0) {
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ 
-              content: "", 
-              sources: context.sources 
+            encoder.encode(`data: ${JSON.stringify({
+              content: "",
+              sources: context.sources
             })}\n\n`)
           )
         }
-        
+
         // Send completion signal
         controller.enqueue(encoder.encode("data: [DONE]\n\n"))
         controller.close()
@@ -161,19 +197,19 @@ function createSystemPrompt(context: ChatContext): string {
   console.log('- hasAnswer:', !!context.answer)
   console.log('- answerLength:', context.answer?.length || 0)
   console.log('- sourcesCount:', context.sources.length)
-  
+
   if (context.hasLowConfidence) {
-    console.log('❌ Using LOW CONFIDENCE prompt (no Slite answer)')
+    console.log('❌ Using LOW CONFIDENCE prompt (no relevant documents found)')
     return `You are the internal SOP assistant for Stewart & Jane Group. You ONLY have access to Stewart & Jane Group company documentation and CANNOT provide information beyond what is in our company SOPs.
 
 Since I couldn't find this information in our company documentation, here's what I can do:
 
-**This one isn't on the market yet, check the link below to request it!** 🏗️ 
+**This one isn't on the market yet, check the link below to request it!**
 
 If you're looking for something that should have documentation but doesn't exist yet, you can request it be built here:
 **Request New SOP:** https://docs.google.com/forms/d/e/1FAIpQLSc3lITA26L8MvnlYJxpZ-SmhU0Qus5bQRHprB0XDWRhFtX4GQ/viewform
 
-**Need help clarifying your question?** 🎯 Try being more specific:
+**Need help clarifying your question?** Try being more specific:
 - Instead of "How do I work a lead?" try "How do I work a Google Search seller lead?"
 - Instead of "What's our policy?" ask "What's our vacation policy?"
 
@@ -181,21 +217,25 @@ I can ONLY help with Stewart & Jane Group internal processes and procedures. I c
   }
 
   if (context.answer) {
-    // Use Slite's answer directly with strict guardrails
-    console.log('✅ Using SLITE ANSWER prompt (has valid answer)')
-    return `You are the internal SOP assistant for Stewart & Jane Group. You have access to company documentation and found a relevant answer.
+    // Use retrieved document chunks as context
+    console.log('✅ Using DOCUMENT CONTEXT prompt (found relevant documents)')
+    return `You are the internal SOP assistant for Stewart & Jane Group. You have access to company documentation and found relevant information to answer this question.
 
 CRITICAL CONSTRAINTS:
-- You MUST ONLY use information from the provided company documentation
+- You MUST ONLY use information from the provided company documentation below
 - You CANNOT add external knowledge or general advice beyond what's provided
 - You CANNOT provide general real estate, legal, or business advice outside Stewart & Jane Group procedures
 - If asked about anything outside our company SOPs, you must redirect to the request form
+- Synthesize the information from the documents into a clear, helpful answer
+- If the documents don't fully answer the question, acknowledge what information is available and suggest requesting additional documentation
 
-Here is the company documentation that answers this question:
+RELEVANT COMPANY DOCUMENTATION:
 
 ${context.answer}
 
-Present this information clearly and helpfully, but DO NOT add any information beyond what's provided. If the user asks follow-up questions that aren't covered in our documentation, direct them to submit a request for new documentation.`
+---
+
+Using ONLY the documentation above, provide a clear and helpful answer. If the user asks follow-up questions that aren't covered in our documentation, direct them to submit a request for new documentation at: https://docs.google.com/forms/d/e/1FAIpQLSc3lITA26L8MvnlYJxpZ-SmhU0Qus5bQRHprB0XDWRhFtX4GQ/viewform`
   }
 
   console.log('⚠️ Using FALLBACK prompt (no answer, no low confidence)')
@@ -228,16 +268,16 @@ function createMessages(
     for (let i = chatHistory.length - 1; i >= 0; i--) {
       const message = chatHistory[i]
       const messageTokens = countTokens(message.content)
-      
+
       if (historyTokens + messageTokens > maxHistoryTokens) {
         break
       }
-      
+
       messages.splice(1, 0, {
         role: message.role as 'user' | 'assistant',
         content: message.content,
       })
-      
+
       historyTokens += messageTokens
     }
   }
@@ -256,7 +296,7 @@ export async function generateResponseAndSave(
 ): Promise<ReadableStream<Uint8Array>> {
   const systemPrompt = createSystemPrompt(context)
   const messages = createMessages(systemPrompt, query, chatHistory)
-  
+
   const response = await openai.chat.completions.create({
     model: config.openai.chatModel,
     messages,
@@ -267,12 +307,12 @@ export async function generateResponseAndSave(
 
   // Convert OpenAI stream to Server-Sent Events format
   const encoder = new TextEncoder()
-  
+
   return new ReadableStream({
     async start(controller) {
       try {
         let fullContent = ""
-        
+
         for await (const chunk of response) {
           const content = chunk.choices[0]?.delta?.content
           if (content) {
@@ -283,7 +323,7 @@ export async function generateResponseAndSave(
             )
           }
         }
-        
+
         // Save assistant message to database
         await db.message.create({
           data: {
@@ -294,17 +334,17 @@ export async function generateResponseAndSave(
             tokensUsed: countTokens(fullContent),
           },
         })
-        
+
         // Send final message with sources if available
         if (context.sources.length > 0) {
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ 
-              content: "", 
-              sources: context.sources 
+            encoder.encode(`data: ${JSON.stringify({
+              content: "",
+              sources: context.sources
             })}\n\n`)
           )
         }
-        
+
         // Send completion signal
         controller.enqueue(encoder.encode("data: [DONE]\n\n"))
         controller.close()
@@ -318,4 +358,3 @@ export async function generateResponseAndSave(
     },
   })
 }
-

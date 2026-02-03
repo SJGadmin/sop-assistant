@@ -8,14 +8,12 @@ export const config = {
     embeddingModel: 'text-embedding-3-small',
     embeddingDimensions: 1536,
   },
-  
-  // Slite
-  slite: {
-    apiKey: env.SLITE_API_KEY,
-    baseUrl: 'https://api.slite.com/v1',
-    channelFilter: env.SLITE_CHANNEL_FILTER,
+
+  // Blob Storage
+  blob: {
+    token: env.BLOB_READ_WRITE_TOKEN,
   },
-  
+
   // RAG
   rag: {
     topK: env.TOP_K,
@@ -24,14 +22,12 @@ export const config = {
     chunkOverlap: env.CHUNK_OVERLAP,
     historyMaxTokens: env.HISTORY_MAX_TOKENS,
   },
-  
+
   // Rate Limiting
   rateLimit: {
     requests: env.RATE_LIMIT_REQUESTS,
     windowMinutes: env.RATE_LIMIT_WINDOW_MINUTES,
   },
-  
-  // No authentication required anymore
 } as const
 
 export default config
