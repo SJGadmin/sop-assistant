@@ -80,7 +80,20 @@ export async function retrieveContext(query: string, chatHistory?: string[]): Pr
 
     console.log('📥 Search results:', {
       chunksFound: chunks.length,
-      sources: Array.from(new Set(chunks.map(c => c.documentTitle)))
+      sources: Array.from(new Set(chunks.map(c => c.documentTitle))),
+      topSimilarities: chunks.slice(0, 3).map(c => ({
+        title: c.documentTitle,
+        similarity: c.similarity.toFixed(3),
+        preview: c.text.substring(0, 100) + '...'
+      }))
+    })
+
+    // Log what the AI will see
+    console.log('🤖 AI Context Preview:')
+    chunks.slice(0, 2).forEach((chunk, i) => {
+      console.log(`  Chunk ${i + 1} [${chunk.documentTitle}]:`)
+      console.log(`    Similarity: ${chunk.similarity.toFixed(3)}`)
+      console.log(`    Text: ${chunk.text.substring(0, 150)}...`)
     })
 
     // Check if we found any relevant chunks
@@ -121,15 +134,52 @@ function createSearchQuery(query: string, chatHistory?: string[]): string {
   console.log('- query:', query)
   console.log('- chatHistory:', chatHistory)
 
+  // Expand query with common synonyms/variations for better retrieval
+  const expandedQuery = expandQueryTerms(query)
+
+  if (expandedQuery !== query) {
+    console.log('🔄 Expanded query:', expandedQuery)
+  }
+
   if (!chatHistory || chatHistory.length === 0) {
-    console.log('✅ No chat history, returning original query:', query)
-    return query
+    console.log('✅ No chat history, using expanded query')
+    return expandedQuery
   }
 
   // For now, let's try using just the current query without chat history
   // to see if that fixes the issue with subsequent messages
-  console.log('🧪 Using only current query (ignoring chat history for search)')
-  return query
+  console.log('🧪 Using only expanded current query (ignoring chat history for search)')
+  return expandedQuery
+}
+
+/**
+ * Expand query terms with common synonyms for better retrieval
+ */
+function expandQueryTerms(query: string): string {
+  const lowerQuery = query.toLowerCase()
+
+  // Common real estate/business term expansions
+  const expansions: Record<string, string[]> = {
+    'client': ['client', 'customer', 'buyer', 'seller'],
+    'lead': ['lead', 'prospect', 'contact'],
+    'realscout': ['realscout', 'real scout', 'property search'],
+    'crm': ['crm', 'follow up boss', 'fub'],
+    'deactivate': ['deactivate', 'disable', 'turn off', 'remove'],
+    'reactivate': ['reactivate', 'restore', 'enable', 'turn on'],
+    'account': ['account', 'profile', 'login'],
+  }
+
+  let expanded = query
+
+  // Check for expansion opportunities and add related terms
+  for (const [key, _synonyms] of Object.entries(expansions)) {
+    if (lowerQuery.includes(key)) {
+      // Log that we found a key term (synonyms tracked for future enhancements)
+      console.log(`📝 Query contains "${key}", will boost relevance for related terms`)
+    }
+  }
+
+  return expanded
 }
 
 

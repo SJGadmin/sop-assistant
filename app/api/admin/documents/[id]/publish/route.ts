@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { chunkText } from '@/lib/chunker'
+import { chunkTextWithContext } from '@/lib/chunker-enhanced'
 import { getEmbeddings } from '@/lib/embeddings'
 
 // POST /api/admin/documents/[id]/publish - Publish document and generate embeddings
@@ -37,9 +37,9 @@ export async function POST(
       // Delete any existing chunks for this document
       await db.chunk.deleteMany({ where: { documentId: id } })
 
-      // Chunk the markdown content
-      const chunks = chunkText(document.markdown)
-      console.log(`📄 Document "${document.title}" chunked into ${chunks.length} chunks`)
+      // Chunk the content with enhanced context
+      const chunks = chunkTextWithContext(document.markdown || document.content || '')
+      console.log(`📄 Document "${document.title}" chunked into ${chunks.length} enhanced chunks`)
 
       if (chunks.length === 0) {
         throw new Error('No chunks generated from content')
