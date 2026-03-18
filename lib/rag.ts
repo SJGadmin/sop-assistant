@@ -169,17 +169,17 @@ function expandQueryTerms(query: string): string {
     'account': ['account', 'profile', 'login'],
   }
 
-  let expanded = query
+  const addedTerms: string[] = []
 
-  // Check for expansion opportunities and add related terms
-  for (const [key, _synonyms] of Object.entries(expansions)) {
+  for (const [key, synonyms] of Object.entries(expansions)) {
     if (lowerQuery.includes(key)) {
-      // Log that we found a key term (synonyms tracked for future enhancements)
-      console.log(`📝 Query contains "${key}", will boost relevance for related terms`)
+      const newTerms = synonyms.filter(s => !lowerQuery.includes(s))
+      addedTerms.push(...newTerms)
+      console.log(`📝 Query contains "${key}", adding synonyms: ${newTerms.join(', ')}`)
     }
   }
 
-  return expanded
+  return addedTerms.length > 0 ? `${query} ${addedTerms.join(' ')}` : query
 }
 
 
@@ -196,7 +196,7 @@ export async function generateResponse(
     messages,
     stream: true,
     temperature: 0.1,
-    max_tokens: 1000,
+    max_tokens: 2000,
   })
 
   // Convert OpenAI stream to Server-Sent Events format
@@ -352,7 +352,7 @@ export async function generateResponseAndSave(
     messages,
     stream: true,
     temperature: 0.1,
-    max_tokens: 1000,
+    max_tokens: 2000,
   })
 
   // Convert OpenAI stream to Server-Sent Events format

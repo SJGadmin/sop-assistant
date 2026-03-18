@@ -17,7 +17,7 @@ const envSchema = z.object({
 
   // RAG Configuration
   TOP_K: z.coerce.number().default(8),
-  MIN_SIMILARITY: z.coerce.number().default(0.7),
+  MIN_SIMILARITY: z.coerce.number().default(0.5),
   CHUNK_SIZE: z.coerce.number().default(500),
   CHUNK_OVERLAP: z.coerce.number().default(100),
   HISTORY_MAX_TOKENS: z.coerce.number().default(2000),
